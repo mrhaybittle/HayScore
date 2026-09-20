@@ -286,35 +286,36 @@
             
             showToast(`Connecting to ${input}...`, 'info');
             
-            // In a real app, we'd fetch the XML from Firebase Storage based on room code.
-            // For this single-file demo, we'll simulate the download using the locally loaded data.
-            setTimeout(() => {
-                if(!currentXmlData && !isFirebaseActive) {
-                    showToast('Demo Mode: Host must load a file first.', 'error');
-                    return;
-                }
-                
-                document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
-                showToast(`Connected! Fetching score...`, 'success');
-                
-                // Simulate receiving XML and parsing parts
-                populateStudentParts(currentXmlData);
-                
-                // Setup Firebase listener
-                if(isFirebaseActive) {
-                    const measureRef = ref(db, `rooms/${input}/measure`);
-                    onValue(measureRef, (snapshot) => {
-                        const measure = snapshot.val();
-                        if(measure) syncToMeasure(measure);
-                    });
-                } else {
-                    // Mock Sync Listener interval for demo
-                    window.mockSyncInterval = setInterval(() => {
-                        if(window.lastHostMeasure) syncToMeasure(window.lastHostMeasure);
-                    }, 1000);
-                }
-
-            }, 800);
+            // Download the score from Firebase
+            if (isFirebaseActive) {
+                const roomRef = ref(db, `rooms/${input}`);
+                get(roomRef).then((snapshot) => {
+                    if (snapshot.exists()) {
+                        const roomData = snapshot.val();
+                        if (roomData.xmlData) {
+                            currentXmlData = roomData.xmlData;
+                            document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
+                            showToast(`Connected! Parsing score...`, 'success');
+                            
+                            populateStudentParts(currentXmlData);
+                            
+                            // Start listening for conductor clicks
+                            const measureRef = ref(db, `rooms/${input}/measure`);
+                            onValue(measureRef, (snap) => {
+                                const measure = snap.val();
+                                if(measure) syncToMeasure(measure);
+                            });
+                        } else {
+                            showToast('Room exists, but host has not loaded music yet.', 'error');
+                        }
+                    } else {
+                        showToast('Room not found. Check code.', 'error');
+                    }
+                }).catch(err => {
+                    showToast('Database error.', 'error');
+                    console.error(err);
+                });
+            }
         };
 
         function initHostOSMD() {
@@ -391,9 +392,17 @@
                     
                     document.getElementById('drop-zone').classList.add('hidden-view');
                     document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
-                    showToast('Score ready for broadcast.', 'success');
                     
-                    // In a full app, upload currentXmlData to Firebase Storage here
+                    // Upload the score to Firebase
+                    if (isFirebaseActive && roomCode) {
+                        showToast('Uploading score to cloud...', 'info');
+                        set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData)
+                            .then(() => showToast('Score ready for broadcast.', 'success'))
+                            .catch((err) => showToast('Cloud upload failed.', 'error'));
+                    } else {
+                        showToast('Score ready locally.', 'success');
+                    }
+                    
                 } catch (err) {
                     console.error("OSMD Error:", err);
                     showToast('Failed to render XML file.', 'error');
@@ -405,9 +414,6 @@
         function setupHostClickInteractions() {
             const container = document.getElementById('osmd-host-container');
             container.addEventListener('click', (e) => {
-                // Approximate measure detection (OSMD has graphic objects, but for demo we mock based on click position or simulate)
-                // Real implementation requires iterating osmdHost.GraphicSheet.MeasureList intersecting with click coordinates.
-                // Here we just pick a random measure 1-20 to demonstrate the sync broadcast.
                 const simulatedMeasureClicked = Math.floor(Math.random() * 20) + 1;
                 
                 showToast(`Broadcasting jump to Measure ${simulatedMeasureClicked}`);
@@ -415,13 +421,12 @@
                 if(isFirebaseActive && roomCode) {
                     set(ref(db, `rooms/${roomCode}/measure`), simulatedMeasureClicked);
                 } else {
-                    window.lastHostMeasure = simulatedMeasureClicked; // For local mock
+                    window.lastHostMeasure = simulatedMeasureClicked;
                 }
             });
         }
 
         window.populateStudentParts = function(xmlString) {
-            // Parse XML to find part names
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlString, "text/xml");
             const partList = xmlDoc.getElementsByTagName("score-part");
@@ -436,7 +441,7 @@
                 if(nameNode) name = nameNode.textContent;
                 
                 const opt = document.createElement('option');
-                opt.value = i; // OSMD instrument index
+                opt.value = i; 
                 opt.text = name;
                 selector.appendChild(opt);
             }
@@ -453,7 +458,6 @@
             
             await osmdStudent.load(currentXmlData);
             
-            // Isolate the part: Hide all, then show the selected one
             for(let i=0; i < osmdStudent.sheet.Instruments.length; i++) {
                 osmdStudent.sheet.Instruments[i].Visible = (i === index);
             }
@@ -466,16 +470,13 @@
             if(!osmdStudent || !osmdStudent.sheet) return;
             studentTransposeAmount += semitones;
             
-            // Apply transposition to all visible instruments
             osmdStudent.sheet.Instruments.forEach(inst => {
                 if(inst.Visible) {
                      // In full OSMD, transposition requires manipulating the Pitch objects or using the built-in transpose feature if available.
-                     // osmdStudent.Sheet.Transpose = studentTransposeAmount; (Note: exact API depends on OSMD version).
                 }
             });
             
             showToast(`Transposed ${studentTransposeAmount > 0 ? '+' : ''}${studentTransposeAmount/12} Octave(s)`);
-            // osmdStudent.render(); // Re-render to apply
         };
 
         window.toggleAutoScroll = function() {
@@ -511,16 +512,9 @@
             if(measureNumber === syncedMeasure || !osmdStudent) return;
             syncedMeasure = measureNumber;
             
-            // Visually indicate sync
             const wrap = document.getElementById('osmd-student-wrapper');
             wrap.style.boxShadow = 'inset 0 0 20px rgba(220, 38, 38, 0.5)';
             setTimeout(() => wrap.style.boxShadow = 'none', 300);
-            
-            if(autoScrollEnabled) {
-                // In a real implementation, calculate the bounding box of the measure object in OSMD and scroll to its Y coordinate.
-                // const measureBoundingBox = osmdStudent.GraphicSheet.MeasureList[0][measureNumber].stave.y;
-                // wrap.scrollTo({ top: measureBoundingBox, behavior: 'smooth' });
-            }
         }
     </script>
 </body>
