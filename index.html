@@ -386,26 +386,32 @@
             
             reader.onload = async function(e) {
                 currentXmlData = e.target.result;
+                
+                // STEP 1: Render locally FIRST (Isolated from Firebase)
                 try {
                     await osmdHost.load(currentXmlData);
                     osmdHost.render();
                     
                     document.getElementById('drop-zone').classList.add('hidden-view');
                     document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
-                    
-                    // Upload the score to Firebase
-                    if (isFirebaseActive && roomCode) {
-                        showToast('Uploading score to cloud...', 'info');
-                        set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData)
-                            .then(() => showToast('Score ready for broadcast.', 'success'))
-                            .catch((err) => showToast('Cloud upload failed.', 'error'));
-                    } else {
-                        showToast('Score ready locally.', 'success');
-                    }
-                    
+                    showToast('Score rendered on screen.', 'success');
                 } catch (err) {
-                    console.error("OSMD Error:", err);
-                    showToast('Failed to render XML file.', 'error');
+                    console.error("OSMD Render Error:", err);
+                    showToast('Failed to draw sheet music.', 'error');
+                    return; // Stop here if it cannot draw locally
+                }
+                
+                // STEP 2: Upload to Firebase SECOND in the background
+                if (isFirebaseActive && roomCode) {
+                    setTimeout(() => {
+                        showToast('Uploading score to sync engine...', 'info');
+                        set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData)
+                            .then(() => showToast('Score ready for students!', 'success'))
+                            .catch((err) => {
+                                console.error("Firebase Upload Error:", err);
+                                showToast('Cloud upload failed.', 'error');
+                            });
+                    }, 500); // Give the browser half a second to finish drawing before uploading
                 }
             };
             reader.readAsText(file);
