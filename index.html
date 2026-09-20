@@ -170,10 +170,16 @@
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // Firebase Configuration (Using standard vars for environments, falling back to mock logic if missing)
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : { projectId: "demo-project" };
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBAJSw8QFuzMoCXqZY2wmO3Nmy2Fdy6Q4U",
+            authDomain: "haysync-9b816.firebaseapp.com",
+            projectId: "haysync-9b816",
+            storageBucket: "haysync-9b816.firebasestorage.app",
+            messagingSenderId: "717730658604",
+            appId: "1:717730658604:web:e09a312b2ac7c8426e9489",
+            measurementId: "G-B9M5VTMB4B"
+        };
             
         let app, db, auth;
         let isFirebaseActive = false;
