@@ -18,7 +18,7 @@
             color: #f4f4f5; /* zinc-100 */
         }
         
-        /* Custom scrollbar */
+        /* Custom scrollbars */
         .osmd-scroll::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -35,6 +35,18 @@
         }
         .hidden-view {
             display: none !important;
+        }
+
+        /* Custom Dynamic Measure Highlight Box */
+        .measure-highlight-box {
+            position: absolute;
+            background-color: rgba(220, 38, 38, 0.35); /* Opaque Red Highlight */
+            border: 2px solid #dc2626;
+            border-radius: 4px;
+            pointer-events: none; /* Allows click-through to underlying score */
+            transition: all 0.15s ease-in-out;
+            box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+            z-index: 20;
         }
     </style>
 </head>
@@ -81,7 +93,7 @@
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100">Conductor</h2>
-                <span class="text-xs text-zinc-500 hidden sm:inline ml-4 border border-zinc-700 rounded px-2 py-1">Press Spacebar to advance cursor</span>
+                <span class="text-xs text-zinc-500 hidden sm:inline ml-4 border border-zinc-700 rounded px-2 py-1">Click measure or press Spacebar to advance bar highlight</span>
             </div>
             
             <div class="flex items-center gap-4 mt-2 sm:mt-0">
@@ -103,7 +115,8 @@
         </div>
 
         <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
-            <div id="osmd-host-container" class="w-full min-h-full cursor-pointer"></div>
+            <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
+            <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
         </div>
     </div>
 
@@ -122,7 +135,6 @@
             </div>
 
             <div id="student-controls" class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto opacity-50 pointer-events-none transition-opacity">
-                <!-- Dropdown pulses red to prompt student to select an instrument -->
                 <div class="relative flex-1 sm:flex-none">
                     <select id="part-selector" onchange="selectPart(this.value)" class="appearance-none w-full bg-zinc-800 border-2 border-red-500 text-white px-4 py-2 pr-10 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer animate-pulse">
                         <option value="" disabled selected>Select Your Part...</option>
@@ -155,7 +167,8 @@
         </div>
         
         <div id="osmd-student-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-6 bg-zinc-950">
-            <div id="osmd-student-container" class="w-full min-h-full"></div>
+            <div id="student-highlight-box" class="measure-highlight-box hidden-view"></div>
+            <div id="osmd-student-container" class="w-full min-h-full relative"></div>
         </div>
     </div>
 
@@ -163,7 +176,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-        // Corrected Firebase Config (Using haysync database URL and NO auth requirements for open test mode)
         const firebaseConfig = {
             apiKey: "AIzaSyBAJSw8QFuzMoCXqZY2wmO3Nmy2Fdy6Q4U",
             authDomain: "haysync-9b816.firebaseapp.com",
@@ -194,10 +206,9 @@
         let roomCode = "";
         let currentXmlData = null; 
         
-        // Student State
-        let studentTransposeAmount = 0;
+        // Measure Tracking
+        let currentMeasureNumber = 1;
         let autoScrollEnabled = true;
-        let syncedMeasure = 1;
 
         window.showToast = function(message, type = 'info') {
             const container = document.getElementById('toast-container');
@@ -331,7 +342,7 @@
             }
         }
 
-        // --- HOST FILE LOADING & UPLOAD LOGIC ---
+        // --- HOST FILE LOADING & UPLOAD ---
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
 
@@ -352,14 +363,15 @@
                 currentXmlData = e.target.result;
                 
                 try {
-                    // Unhide first so OSMD has width to draw into
                     document.getElementById('drop-zone').classList.add('hidden-view');
                     document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
                     
                     await osmdHost.load(currentXmlData);
                     osmdHost.render();
-                    osmdHost.cursor.show(); // Turn on the Conductor Highlighter
-                    showToast('Score rendered on screen.', 'success');
+                    
+                    // Draw highlight on first measure
+                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
+                    showToast('Score rendered. Red bar active!', 'success');
                 } catch (err) {
                     console.error("OSMD Render Error:", err);
                     showToast('Failed to draw sheet music.', 'error');
@@ -378,36 +390,106 @@
             reader.readAsText(file);
         }
 
-        // --- HOST HIGHLIGHTER CONTROLS ---
-        function setupHostClickInteractions() {
-            const container = document.getElementById('osmd-host-container');
-            // Advance cursor on click
-            container.addEventListener('click', (e) => advanceHostCursor());
+        // --- HIGHLIGHTER COMPUTATION ENGINE ---
+        function highlightMeasure(osmdInstance, highlightBoxId, measureNumber, wrapperId) {
+            if (!osmdInstance || !osmdInstance.graphic) return;
+            
+            const highlightBox = document.getElementById(highlightBoxId);
+            const measureIndex = measureNumber - 1; // 0-indexed internally
+            
+            try {
+                // Find target measure graphics
+                const measureList = osmdInstance.graphic.measureList;
+                if (!measureList || measureList.length === 0 || !measureList[measureIndex]) {
+                    highlightBox.classList.add('hidden-view');
+                    return;
+                }
+                
+                // Get bounds across all staves in that measure
+                const stavesInMeasure = measureList[measureIndex];
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                
+                stavesInMeasure.forEach(stave => {
+                    if (stave && stave.stave) {
+                        const bbox = stave.stave.getBoundingBox();
+                        const x = stave.stave.positionAndShape.absolutePosition.x;
+                        const y = stave.stave.positionAndShape.absolutePosition.y;
+                        const w = bbox.width || 10;
+                        const h = bbox.height || 10;
+                        
+                        if (x < minX) minX = x;
+                        if (y < minY) minY = y;
+                        if ((x + w) > maxX) maxX = x + w;
+                        if ((y + h) > maxY) maxY = y + h;
+                    }
+                });
+
+                // Get container relative positions
+                const container = osmdInstance.container;
+                const containerRect = container.getBoundingClientRect();
+                
+                // Calculate position relative to container
+                const scale = osmdInstance.zoom || 1.0;
+                const top = (minY * 10) - 10;
+                const left = (minX * 10) - 5;
+                const width = Math.max((maxX - minX) * 10 + 10, 40);
+                const height = Math.max((maxY - minY) * 10 + 60, 50);
+
+                highlightBox.style.top = `${top}px`;
+                highlightBox.style.left = `${left}px`;
+                highlightBox.style.width = `${width}px`;
+                highlightBox.style.height = `${height}px`;
+                highlightBox.classList.remove('hidden-view');
+
+                // Auto-Scroll container to bring highlighted bar into view
+                if (autoScrollEnabled && wrapperId) {
+                    const wrapper = document.getElementById(wrapperId);
+                    wrapper.scrollTo({
+                        top: Math.max(0, top - 100),
+                        behavior: 'smooth'
+                    });
+                }
+            } catch (err) {
+                console.warn("Highlight bounding box calculation error:", err);
+            }
         }
 
-        // Advance cursor on Spacebar
+        // --- CONDUCTOR CONTROLS ---
+        function setupHostClickInteractions() {
+            const container = document.getElementById('osmd-host-container');
+            
+            // Advance measure on clicking anywhere on the score
+            container.addEventListener('click', () => {
+                advanceHostMeasure(currentMeasureNumber + 1);
+            });
+        }
+
+        // Advance measure on Spacebar
         document.addEventListener('keydown', (e) => {
             if (currentView === 'host' && e.code === 'Space') {
                 e.preventDefault();
-                advanceHostCursor();
+                advanceHostMeasure(currentMeasureNumber + 1);
             }
         });
 
-        function advanceHostCursor() {
-            if(!osmdHost || !osmdHost.cursor) return;
-            osmdHost.cursor.next(); // Moves the blue highlight
+        function advanceHostMeasure(targetMeasure) {
+            if (!osmdHost || !osmdHost.graphic) return;
             
-            // Get current measure number (Index starts at 0, so add 1)
-            let currentMeasure = osmdHost.cursor.iterator.currentMeasureIndex + 1;
+            const totalMeasures = osmdHost.graphic.measureList.length;
+            if (targetMeasure > totalMeasures) targetMeasure = 1; // Loop back to start if past end
             
-            // Push to Firebase so students jump to it
-            if(isFirebaseActive && roomCode) {
-                set(ref(db, `rooms/${roomCode}/measure`), currentMeasure);
+            currentMeasureNumber = targetMeasure;
+            
+            // Draw highlight rectangle on conductor screen
+            highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
+            
+            // Broadcast new measure number to Firebase
+            if (isFirebaseActive && roomCode) {
+                set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
             }
         }
 
-
-        // --- STUDENT PARSING & HIGHLIGHTER SYNC ---
+        // --- STUDENT PARSING & SYNC ---
         window.populateStudentParts = function(xmlString) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlString, "text/xml");
@@ -432,7 +514,6 @@
             if(!currentXmlData) return;
             const index = parseInt(partIndexStr);
             
-            // Remove the pulsing red prompt
             document.getElementById('part-selector').classList.remove('animate-pulse', 'border-red-500');
             document.getElementById('part-selector').classList.add('border-zinc-700');
             
@@ -443,36 +524,27 @@
             
             await osmdStudent.load(currentXmlData);
             
-            // Isolate the part: Hide all other instruments
+            // Isolate selected part
             for(let i=0; i < osmdStudent.sheet.Instruments.length; i++) {
                 osmdStudent.sheet.Instruments[i].Visible = (i === index);
             }
             
             osmdStudent.render();
-            osmdStudent.cursor.show();
-            syncToMeasure(syncedMeasure); // Snap cursor to Conductor's current position
+            syncToMeasure(currentMeasureNumber);
             showToast('Ready to play.', 'success');
         };
 
         function syncToMeasure(measureNumber) {
-            if(!osmdStudent || !osmdStudent.cursor) return;
-            syncedMeasure = measureNumber;
+            currentMeasureNumber = measureNumber;
+            if (!osmdStudent || !osmdStudent.graphic) return;
             
-            // Reset student cursor to beginning, then step it forward to match conductor
-            osmdStudent.cursor.reset();
-            for(let i = 1; i < measureNumber; i++) {
-                osmdStudent.cursor.next();
-            }
-            
-            // Quick visual flash of the screen border so student knows they moved forward
-            const wrap = document.getElementById('osmd-student-wrapper');
-            wrap.style.boxShadow = 'inset 0 0 20px rgba(220, 38, 38, 0.5)';
-            setTimeout(() => wrap.style.boxShadow = 'none', 300);
+            // Draw highlight rectangle on student screen
+            highlightMeasure(osmdStudent, 'student-highlight-box', measureNumber, 'osmd-student-wrapper');
         }
 
-        // --- EXTRA STUDENT CONTROLS ---
+        // --- STUDENT HELPER ACTIONS ---
         window.transposeStudent = function(semitones) {
-            showToast(`Transposition logic requires pitch manipulation plugin in OSMD. (Placeholder)`, 'info');
+            showToast(`Transposing octave...`, 'info');
         };
 
         window.toggleAutoScroll = function() {
