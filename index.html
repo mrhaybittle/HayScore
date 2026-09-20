@@ -37,15 +37,15 @@
             display: none !important;
         }
 
-        /* Semi-Transparent Red Measure Highlight Overlay */
+        /* Semi-Transparent Single-Bar Highlight Overlay */
         .measure-highlight-box {
             position: absolute;
-            background-color: rgba(239, 68, 68, 0.25) !important; /* Semi-transparent Red */
+            background-color: rgba(239, 68, 68, 0.28) !important; /* Semi-transparent Red */
             border: 2px solid #ef4444 !important;
             border-radius: 4px;
             pointer-events: none; /* Mouse clicks pass through directly to score */
-            transition: all 0.12s ease-out;
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+            transition: all 0.1s ease-out;
+            box-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
             z-index: 30;
             mix-blend-mode: screen; /* Keeps white sheet music notes completely visible */
         }
@@ -177,7 +177,7 @@
     <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v1.2.0 • Updated: 21 Sep 2026, 08:45 AEST (Sydney)</div>
+        <div>v1.3.0 • Updated: 21 Sep 2026, 08:52 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -377,7 +377,7 @@
                     await osmdHost.load(currentXmlData);
                     osmdHost.render();
                     
-                    // Draw highlight on first measure
+                    // Draw single-measure highlight on bar 1
                     setTimeout(() => {
                         highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
                     }, 200);
@@ -400,70 +400,75 @@
             reader.readAsText(file);
         }
 
-        // --- DIRECT SVG MEASURE HIGHLIGHT ENGINE ---
+        // --- SINGLE EXACT MEASURE HIGHLIGHT ENGINE ---
         function highlightMeasure(osmdInstance, highlightBoxId, measureNumber, wrapperId) {
             const highlightBox = document.getElementById(highlightBoxId);
-            if (!osmdInstance || !osmdInstance.container) return;
+            if (!osmdInstance || !osmdInstance.graphic) return;
 
-            const container = osmdInstance.container;
+            const measureIndex = measureNumber - 1; // 0-indexed internally
+            const graphicSheet = osmdInstance.graphic;
             
-            // Search SVG for measure bounding rectangles drawn by OSMD
-            // Measure numbers in OSMD DOM are 1-indexed
-            const targetMeasures = container.querySelectorAll(`g.vf-measure[id*="${measureNumber}"], [class*="measure"][id*="${measureNumber}"]`);
-            
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            let found = false;
+            if (!graphicSheet.measureList || !graphicSheet.measureList[measureIndex]) {
+                highlightBox.classList.add('hidden-view');
+                return;
+            }
 
-            if (targetMeasures && targetMeasures.length > 0) {
-                targetMeasures.forEach(elem => {
-                    const rect = elem.getBoundingClientRect();
-                    if (rect.width > 0 && rect.height > 0) {
-                        found = true;
-                        if (rect.left < minX) minX = rect.left;
-                        if (rect.top < minY) minY = rect.top;
-                        if (rect.right > maxX) maxX = rect.right;
-                        if (rect.bottom > maxY) maxY = rect.bottom;
+            try {
+                // Get staves for the EXACT single measure requested
+                const measureStaves = graphicSheet.measureList[measureIndex];
+                
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                let validCount = 0;
+
+                measureStaves.forEach(stave => {
+                    if (stave && stave.PositionAndShape) {
+                        const pos = stave.PositionAndShape;
+                        const absPos = pos.AbsolutePosition;
+                        const size = pos.Size;
+
+                        if (absPos && size) {
+                            validCount++;
+                            // Scale coordinates from internal units to screen pixels (factor of 10)
+                            const x = absPos.x * 10;
+                            const y = absPos.y * 10;
+                            const w = size.width * 10;
+                            const h = size.height * 10;
+
+                            if (x < minX) minX = x;
+                            if (y < minY) minY = y;
+                            if ((x + w) > maxX) maxX = x + w;
+                            if ((y + h) > maxY) maxY = y + h;
+                        }
                     }
                 });
-            }
 
-            // Fallback: Query all staves across the system if specific measure ID is missing
-            if (!found) {
-                const allSvgStaves = container.querySelectorAll('svg g');
-                const containerRect = container.getBoundingClientRect();
-                
-                // Fallback estimate column based on measure number
-                const estCol = ((measureNumber - 1) % 4); 
-                const estRow = Math.floor((measureNumber - 1) / 4);
-                
-                const colWidth = containerRect.width / 4;
-                const rowHeight = 220;
-                
-                minX = containerRect.left + (estCol * colWidth);
-                maxX = minX + colWidth;
-                minY = containerRect.top + (estRow * rowHeight) + 80;
-                maxY = minY + rowHeight;
-            }
+                if (validCount === 0) {
+                    highlightBox.classList.add('hidden-view');
+                    return;
+                }
 
-            const containerRect = container.getBoundingClientRect();
-            const top = minY - containerRect.top + container.scrollTop;
-            const left = minX - containerRect.left;
-            const width = Math.max(maxX - minX, 60);
-            const height = Math.max(maxY - minY, 120);
+                // Fine-tune bounding dimensions for perfect fit around the single measure
+                const top = Math.max(0, minY - 10);
+                const left = Math.max(0, minX - 2);
+                const width = Math.max(maxX - minX + 4, 30);
+                const height = Math.max(maxY - minY + 20, 60);
 
-            highlightBox.style.top = `${top}px`;
-            highlightBox.style.left = `${left}px`;
-            highlightBox.style.width = `${width}px`;
-            highlightBox.style.height = `${height}px`;
-            highlightBox.classList.remove('hidden-view');
+                highlightBox.style.top = `${top}px`;
+                highlightBox.style.left = `${left}px`;
+                highlightBox.style.width = `${width}px`;
+                highlightBox.style.height = `${height}px`;
+                highlightBox.classList.remove('hidden-view');
 
-            // Auto-Scroll container
-            if (autoScrollEnabled && wrapperId) {
-                const wrapper = document.getElementById(wrapperId);
-                wrapper.scrollTo({
-                    top: Math.max(0, top - 80),
-                    behavior: 'smooth'
-                });
+                // Smooth Auto-Scroll to keep active bar visible
+                if (autoScrollEnabled && wrapperId) {
+                    const wrapper = document.getElementById(wrapperId);
+                    wrapper.scrollTo({
+                        top: Math.max(0, top - 100),
+                        behavior: 'smooth'
+                    });
+                }
+            } catch (err) {
+                console.warn("Exact measure calculation fallback:", err);
             }
         }
 
@@ -493,7 +498,7 @@
             
             currentMeasureNumber = targetMeasure;
             
-            // Draw highlight rectangle on conductor screen
+            // Draw highlight rectangle on single conductor measure
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             
             // Broadcast new measure number to Firebase
@@ -553,7 +558,7 @@
             currentMeasureNumber = measureNumber;
             if (!osmdStudent || !osmdStudent.graphic) return;
             
-            // Draw highlight rectangle on student screen
+            // Draw highlight rectangle on single student measure
             highlightMeasure(osmdStudent, 'student-highlight-box', measureNumber, 'osmd-student-wrapper');
         }
 
