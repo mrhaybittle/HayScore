@@ -37,16 +37,17 @@
             display: none !important;
         }
 
-        /* Custom Dynamic Measure Highlight Box */
+        /* Semi-Transparent Red Measure Highlight Overlay */
         .measure-highlight-box {
             position: absolute;
-            background-color: rgba(220, 38, 38, 0.35); /* Opaque Red Highlight */
-            border: 2px solid #dc2626;
+            background-color: rgba(239, 68, 68, 0.25) !important; /* Semi-transparent Red */
+            border: 2px solid #ef4444 !important;
             border-radius: 4px;
-            pointer-events: none; /* Allows click-through to underlying score */
-            transition: all 0.15s ease-in-out;
-            box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
-            z-index: 20;
+            pointer-events: none; /* Mouse clicks pass through directly to score */
+            transition: all 0.12s ease-out;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+            z-index: 30;
+            mix-blend-mode: screen; /* Keeps white sheet music notes completely visible */
         }
     </style>
 </head>
@@ -176,7 +177,7 @@
     <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v1.1.0 • Updated: 21 Sep 2026, 08:36 AEST (Sydney)</div>
+        <div>v1.2.0 • Updated: 21 Sep 2026, 08:45 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -377,7 +378,9 @@
                     osmdHost.render();
                     
                     // Draw highlight on first measure
-                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
+                    setTimeout(() => {
+                        highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
+                    }, 200);
                     showToast('Score rendered. Red bar active!', 'success');
                 } catch (err) {
                     console.error("OSMD Render Error:", err);
@@ -397,66 +400,70 @@
             reader.readAsText(file);
         }
 
-        // --- HIGHLIGHTER COMPUTATION ENGINE ---
+        // --- DIRECT SVG MEASURE HIGHLIGHT ENGINE ---
         function highlightMeasure(osmdInstance, highlightBoxId, measureNumber, wrapperId) {
-            if (!osmdInstance || !osmdInstance.graphic) return;
-            
             const highlightBox = document.getElementById(highlightBoxId);
-            const measureIndex = measureNumber - 1; // 0-indexed internally
+            if (!osmdInstance || !osmdInstance.container) return;
+
+            const container = osmdInstance.container;
             
-            try {
-                // Find target measure graphics
-                const measureList = osmdInstance.graphic.measureList;
-                if (!measureList || measureList.length === 0 || !measureList[measureIndex]) {
-                    highlightBox.classList.add('hidden-view');
-                    return;
-                }
-                
-                // Get bounds across all staves in that measure
-                const stavesInMeasure = measureList[measureIndex];
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                
-                stavesInMeasure.forEach(stave => {
-                    if (stave && stave.stave) {
-                        const bbox = stave.stave.getBoundingBox();
-                        const x = stave.stave.positionAndShape.absolutePosition.x;
-                        const y = stave.stave.positionAndShape.absolutePosition.y;
-                        const w = bbox.width || 10;
-                        const h = bbox.height || 10;
-                        
-                        if (x < minX) minX = x;
-                        if (y < minY) minY = y;
-                        if ((x + w) > maxX) maxX = x + w;
-                        if ((y + h) > maxY) maxY = y + h;
+            // Search SVG for measure bounding rectangles drawn by OSMD
+            // Measure numbers in OSMD DOM are 1-indexed
+            const targetMeasures = container.querySelectorAll(`g.vf-measure[id*="${measureNumber}"], [class*="measure"][id*="${measureNumber}"]`);
+            
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            let found = false;
+
+            if (targetMeasures && targetMeasures.length > 0) {
+                targetMeasures.forEach(elem => {
+                    const rect = elem.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        found = true;
+                        if (rect.left < minX) minX = rect.left;
+                        if (rect.top < minY) minY = rect.top;
+                        if (rect.right > maxX) maxX = rect.right;
+                        if (rect.bottom > maxY) maxY = rect.bottom;
                     }
                 });
+            }
 
-                // Get container relative positions
-                const container = osmdInstance.container;
+            // Fallback: Query all staves across the system if specific measure ID is missing
+            if (!found) {
+                const allSvgStaves = container.querySelectorAll('svg g');
                 const containerRect = container.getBoundingClientRect();
                 
-                // Calculate position relative to container
-                const top = (minY * 10) - 10;
-                const left = (minX * 10) - 5;
-                const width = Math.max((maxX - minX) * 10 + 10, 40);
-                const height = Math.max((maxY - minY) * 10 + 60, 50);
+                // Fallback estimate column based on measure number
+                const estCol = ((measureNumber - 1) % 4); 
+                const estRow = Math.floor((measureNumber - 1) / 4);
+                
+                const colWidth = containerRect.width / 4;
+                const rowHeight = 220;
+                
+                minX = containerRect.left + (estCol * colWidth);
+                maxX = minX + colWidth;
+                minY = containerRect.top + (estRow * rowHeight) + 80;
+                maxY = minY + rowHeight;
+            }
 
-                highlightBox.style.top = `${top}px`;
-                highlightBox.style.left = `${left}px`;
-                highlightBox.style.width = `${width}px`;
-                highlightBox.style.height = `${height}px`;
-                highlightBox.classList.remove('hidden-view');
+            const containerRect = container.getBoundingClientRect();
+            const top = minY - containerRect.top + container.scrollTop;
+            const left = minX - containerRect.left;
+            const width = Math.max(maxX - minX, 60);
+            const height = Math.max(maxY - minY, 120);
 
-                // Auto-Scroll container to bring highlighted bar into view
-                if (autoScrollEnabled && wrapperId) {
-                    const wrapper = document.getElementById(wrapperId);
-                    wrapper.scrollTo({
-                        top: Math.max(0, top - 100),
-                        behavior: 'smooth'
-                    });
-                }
-            } catch (err) {
-                console.warn("Highlight bounding box calculation error:", err);
+            highlightBox.style.top = `${top}px`;
+            highlightBox.style.left = `${left}px`;
+            highlightBox.style.width = `${width}px`;
+            highlightBox.style.height = `${height}px`;
+            highlightBox.classList.remove('hidden-view');
+
+            // Auto-Scroll container
+            if (autoScrollEnabled && wrapperId) {
+                const wrapper = document.getElementById(wrapperId);
+                wrapper.scrollTo({
+                    top: Math.max(0, top - 80),
+                    behavior: 'smooth'
+                });
             }
         }
 
@@ -465,7 +472,7 @@
             const container = document.getElementById('osmd-host-container');
             
             // Advance measure on clicking anywhere on the score
-            container.addEventListener('click', () => {
+            container.addEventListener('click', (e) => {
                 advanceHostMeasure(currentMeasureNumber + 1);
             });
         }
@@ -536,7 +543,9 @@
             }
             
             osmdStudent.render();
-            syncToMeasure(currentMeasureNumber);
+            setTimeout(() => {
+                syncToMeasure(currentMeasureNumber);
+            }, 200);
             showToast('Ready to play.', 'success');
         };
 
