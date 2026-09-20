@@ -3,13 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HayScore</title>
+    <title>HaySync</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://unpkg.com/opensheetmusicdisplay"></script>
+    <!-- Tone.js MIDI Parser Library -->
+    <script src="https://unpkg.com/@tonejs/midi"></script>
 
     <style>
         body {
@@ -61,7 +63,7 @@
         
         <div class="text-center mb-16 relative z-10">
             <h1 class="text-6xl font-bold text-red-600 mb-4 tracking-tight drop-shadow-lg">
-                <i class="fa-solid fa-music mr-3"></i>HayScore
+                <i class="fa-solid fa-music mr-3"></i>HaySync
             </h1>
             <p class="text-lg text-zinc-400 max-w-md mx-auto">Real-time sheet music synchronization.</p>
         </div>
@@ -113,9 +115,9 @@
 
         <div id="drop-zone" class="flex-1 flex flex-col items-center justify-center p-8 bg-zinc-900/50 border-4 border-dashed border-zinc-700 m-8 rounded-2xl transition-colors hover:border-red-600 hover:bg-red-950/20">
             <i class="fa-solid fa-file-audio text-6xl text-red-600 mb-6 drop-shadow-md"></i>
-            <h3 class="text-3xl font-bold text-zinc-100 mb-2">Load MusicXML</h3>
-            <p class="text-zinc-400 mb-8 text-lg">Drag & drop file here, or click below</p>
-            <input type="file" id="file-input" accept=".musicxml,.xml" class="hidden">
+            <h3 class="text-3xl font-bold text-zinc-100 mb-2">Load Sheet Music</h3>
+            <p class="text-zinc-400 mb-8 text-lg">Drag & drop MusicXML or MIDI file (.mid) here, or click below</p>
+            <input type="file" id="file-input" accept=".musicxml,.xml,.mid,.midi" class="hidden">
             <button onclick="document.getElementById('file-input').click()" class="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg shadow-lg shadow-red-900/50 transition font-bold text-lg">
                 Browse Files
             </button>
@@ -186,8 +188,8 @@
 
     <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
-        <div>HayScore App</div>
-        <div>v1.6.0 • Updated: 21 Sep 2026, 09:18 AEST (Sydney)</div>
+        <div>HaySync App</div>
+        <div>v1.7.0 • Updated: 21 Sep 2026, 09:20 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -368,7 +370,7 @@
             }
         }
 
-        // --- HOST FILE LOADING & UPLOAD ---
+        // --- HOST FILE LOADING, MIDI PARSING & UPLOAD ---
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
 
@@ -381,40 +383,148 @@
         function handleFiles(files) {
             if (files.length === 0) return;
             const file = files[0];
+            const fileName = file.name.toLowerCase();
             
-            showToast('Processing score...', 'info');
-            const reader = new FileReader();
+            showToast('Processing file...', 'info');
+
+            if (fileName.endsWith('.mid') || fileName.endsWith('.midi')) {
+                // Read binary MIDI file
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const midiData = new Uint8Array(e.target.result);
+                        const midi = new Midi(midiData);
+                        const generatedXml = convertMidiToMusicXML(midi, file.name);
+                        renderLoadedScore(generatedXml);
+                    } catch (err) {
+                        console.error("MIDI Processing Error:", err);
+                        showToast('Failed to parse MIDI file.', 'error');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                // Standard MusicXML file
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    renderLoadedScore(e.target.result);
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // --- MIDI TO MUSICXML CONVERTER ---
+        function convertMidiToMusicXML(midi, songTitle) {
+            const safeTitle = songTitle.replace(/\.[^/.]+$/, "");
+            let xmlParts = '';
+            let xmlPartList = '';
+
+            midi.tracks.forEach((track, index) => {
+                if (track.notes.length === 0) return; // Skip empty tracks
+                
+                const partId = `P${index + 1}`;
+                const trackName = track.name || `Instrument ${index + 1}`;
+                
+                xmlPartList += `
+                <score-part id="${partId}">
+                    <part-name>${trackName}</part-name>
+                </score-part>`;
+
+                let partMeasures = '';
+                let currentMeasure = 1;
+                let measureNotes = '';
+                let measureTime = 0; // seconds
+
+                // Sort notes by start time
+                const sortedNotes = track.notes.sort((a, b) => a.time - b.time);
+
+                sortedNotes.forEach((note) => {
+                    const step = note.pitch.charAt(0);
+                    const octave = note.octave;
+                    const alter = note.pitch.includes('#') ? 1 : (note.pitch.includes('b') ? -1 : 0);
+
+                    measureNotes += `
+                    <note>
+                        <pitch>
+                            <step>${step}</step>
+                            ${alter !== 0 ? `<alter>${alter}</alter>` : ''}
+                            <octave>${octave}</octave>
+                        </pitch>
+                        <duration>1</duration>
+                        <type>quarter</type>
+                    </note>`;
+
+                    // Wrap into a measure every 4 notes for standard playback
+                    if (measureNotes.split('<note>').length - 1 >= 4) {
+                        partMeasures += `
+                        <measure number="${currentMeasure}">
+                            ${currentMeasure === 1 ? `
+                            <attributes>
+                                <divisions>1</divisions>
+                                <key><fifths>0</fifths></key>
+                                <time><beats>4</beats><beat-type>4</beat-type></time>
+                                <clef><sign>G</sign><line>2</line></clef>
+                            </attributes>` : ''}
+                            ${measureNotes}
+                        </measure>`;
+                        currentMeasure++;
+                        measureNotes = '';
+                    }
+                });
+
+                if (measureNotes !== '') {
+                    partMeasures += `
+                    <measure number="${currentMeasure}">
+                        ${currentMeasure === 1 ? `
+                        <attributes>
+                            <divisions>1</divisions>
+                            <key><fifths>0</fifths></key>
+                            <time><beats>4</beats><beat-type>4</beat-type></time>
+                            <clef><sign>G</sign><line>2</line></clef>
+                        </attributes>` : ''}
+                        ${measureNotes}
+                    </measure>`;
+                }
+
+                xmlParts += `<part id="${partId}">${partMeasures}</part>`;
+            });
+
+            return `<?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+            <score-partwise version="3.1">
+                <work><work-title>${safeTitle}</work-title></work>
+                <part-list>${xmlPartList}</part-list>
+                ${xmlParts}
+            </score-partwise>`;
+        }
+
+        async function renderLoadedScore(xmlContent) {
+            currentXmlData = xmlContent;
             
-            reader.onload = async function(e) {
-                currentXmlData = e.target.result;
+            try {
+                document.getElementById('drop-zone').classList.add('hidden-view');
+                document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
                 
-                try {
-                    document.getElementById('drop-zone').classList.add('hidden-view');
-                    document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
-                    
-                    await osmdHost.load(currentXmlData);
-                    osmdHost.render();
-                    
-                    setTimeout(() => {
-                        highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
-                    }, 200);
-                    showToast('Score rendered. Red bar active!', 'success');
-                } catch (err) {
-                    console.error("OSMD Render Error:", err);
-                    showToast('Failed to draw sheet music.', 'error');
-                    return; 
-                }
+                await osmdHost.load(currentXmlData);
+                osmdHost.render();
                 
-                if (isFirebaseActive && roomCode) {
-                    setTimeout(() => {
-                        showToast('Uploading score to sync engine...', 'info');
-                        set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData)
-                            .then(() => showToast('Score ready for students!', 'success'))
-                            .catch((err) => showToast('Cloud upload failed.', 'error'));
-                    }, 500); 
-                }
-            };
-            reader.readAsText(file);
+                setTimeout(() => {
+                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
+                }, 200);
+                showToast('Score rendered successfully!', 'success');
+            } catch (err) {
+                console.error("OSMD Render Error:", err);
+                showToast('Failed to draw sheet music.', 'error');
+                return; 
+            }
+            
+            if (isFirebaseActive && roomCode) {
+                setTimeout(() => {
+                    showToast('Uploading score to sync engine...', 'info');
+                    set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData)
+                        .then(() => showToast('Score ready for students!', 'success'))
+                        .catch((err) => showToast('Cloud upload failed.', 'error'));
+                }, 500); 
+            }
         }
 
         // --- ACCURATE SINGLE MEASURE HIGHLIGHT ENGINE ---
