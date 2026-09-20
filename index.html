@@ -10,7 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://unpkg.com/opensheetmusicdisplay"></script>
-    <!-- Tone.js MIDI Parser Library -->
     <script src="https://unpkg.com/@tonejs/midi"></script>
 
     <style>
@@ -20,7 +19,6 @@
             color: #f4f4f5; /* zinc-100 */
         }
         
-        /* Custom scrollbars */
         .osmd-scroll::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -39,17 +37,16 @@
             display: none !important;
         }
 
-        /* Semi-Transparent Single-Bar Highlight Overlay */
         .measure-highlight-box {
             position: absolute;
-            background-color: rgba(239, 68, 68, 0.28) !important; /* Semi-transparent Red */
+            background-color: rgba(239, 68, 68, 0.28) !important;
             border: 2px solid #ef4444 !important;
             border-radius: 4px;
-            pointer-events: none; /* Mouse clicks pass through directly to score */
+            pointer-events: none;
             transition: all 0.12s ease-out;
             box-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
             z-index: 30;
-            mix-blend-mode: screen; /* Keeps white sheet music notes completely visible */
+            mix-blend-mode: screen;
         }
     </style>
 </head>
@@ -69,7 +66,6 @@
         </div>
         
         <div class="flex flex-col sm:flex-row gap-6 w-full max-w-2xl relative z-10">
-            <!-- Host Button -->
             <button onclick="switchView('host')" class="flex-1 bg-zinc-900 hover:bg-zinc-800 border-2 border-red-900 hover:border-red-600 text-zinc-100 rounded-xl p-8 shadow-2xl transition-all flex flex-col items-center gap-4 group">
                 <div class="bg-red-600/10 p-4 rounded-full group-hover:bg-red-600/20 transition-colors">
                     <i class="fa-solid fa-chalkboard-user text-4xl text-red-500"></i>
@@ -78,7 +74,6 @@
                 <span class="text-sm text-zinc-500">Load music, control the session</span>
             </button>
             
-            <!-- Student Button -->
             <button onclick="switchView('student')" class="flex-1 bg-zinc-900 hover:bg-zinc-800 border-2 border-zinc-800 hover:border-red-600 text-zinc-100 rounded-xl p-8 shadow-2xl transition-all flex flex-col items-center gap-4 group">
                 <div class="bg-zinc-800 p-4 rounded-full group-hover:bg-red-600/20 transition-colors">
                     <i class="fa-solid fa-users text-4xl text-zinc-400 group-hover:text-red-500 transition-colors"></i>
@@ -100,7 +95,6 @@
                 <span class="text-xs text-zinc-500 hidden sm:inline border border-zinc-700 rounded px-2 py-1">Left/Right Arrows or Spacebar</span>
             </div>
 
-            <!-- Large Center Bar Display -->
             <div class="absolute left-1/2 transform -translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md">
                 <span id="host-bar-display" class="text-2xl sm:text-3xl font-bold text-white tracking-wide font-mono drop-shadow-md">Bar: 1</span>
             </div>
@@ -116,11 +110,18 @@
         <div id="drop-zone" class="flex-1 flex flex-col items-center justify-center p-8 bg-zinc-900/50 border-4 border-dashed border-zinc-700 m-8 rounded-2xl transition-colors hover:border-red-600 hover:bg-red-950/20">
             <i class="fa-solid fa-file-audio text-6xl text-red-600 mb-6 drop-shadow-md"></i>
             <h3 class="text-3xl font-bold text-zinc-100 mb-2">Load Sheet Music</h3>
-            <p class="text-zinc-400 mb-8 text-lg">Drag & drop MusicXML or MIDI file (.mid) here, or click below</p>
+            <p class="text-zinc-400 mb-8 text-lg">Drag & drop MusicXML or MIDI file (.mid) here, or select below</p>
+            
             <input type="file" id="file-input" accept=".musicxml,.xml,.mid,.midi" class="hidden">
-            <button onclick="document.getElementById('file-input').click()" class="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg shadow-lg shadow-red-900/50 transition font-bold text-lg">
-                Browse Files
-            </button>
+            
+            <div class="flex flex-wrap justify-center gap-4">
+                <button onclick="document.getElementById('file-input').click()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg shadow-lg shadow-red-900/50 transition font-bold text-base flex items-center gap-2">
+                    <i class="fa-solid fa-folder-open"></i> Browse Local Files
+                </button>
+                <button onclick="openGoogleDrivePicker()" class="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 px-6 py-3 rounded-lg shadow-lg transition font-bold text-base flex items-center gap-2">
+                    <i class="fa-brands fa-google-drive text-green-500"></i> Open HayScore Google Drive
+                </button>
+            </div>
         </div>
 
         <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
@@ -143,7 +144,6 @@
                 </div>
             </div>
 
-            <!-- Large Center Bar Display -->
             <div class="static lg:absolute lg:left-1/2 lg:transform lg:-translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md my-1 lg:my-0">
                 <span id="student-bar-display" class="text-2xl sm:text-3xl font-bold text-white tracking-wide font-mono drop-shadow-md">Bar: 1</span>
             </div>
@@ -186,10 +186,9 @@
         </div>
     </div>
 
-    <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HayScore App</div>
-        <div>v1.8.0 • Updated: 21 Sep 2026, 09:28 AEST (Sydney)</div>
+        <div>v1.9.1 • Updated: 21 Sep 2026, 09:53 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -214,31 +213,36 @@
             app = initializeApp(firebaseConfig);
             db = getDatabase(app);
             isFirebaseActive = true;
-            console.log("Firebase initialized");
         } catch(e) {
             console.log("Firebase config error.");
         }
 
-        // Global State
+        // Target Shared Google Drive Folder ID
+        const HAY_SCORE_FOLDER_ID = "12QYBAl7PE_nIK-02hQNgA-tKUCQbCnUi";
+
         let currentView = 'home';
         let osmdHost = null;
         let osmdStudent = null;
         let roomCode = "";
         let currentXmlData = null; 
-        
-        // Measure Tracking
         let currentMeasureNumber = 1;
         let autoScrollEnabled = true;
 
-        // Clean, simple, school-safe 4-letter words list
         const SAFE_WORD_CODES = [
             "BAND", "NOTE", "BEAT", "SONG", "TUNE", "DRUM", "HORN", "BASS",
             "CLEF", "PLAY", "REST", "JAZZ", "SING", "ROCK", "OBOE", "LUTE",
             "REED", "KEYS", "TRIO", "SOLO", "DUET", "FAST", "SLOW", "LOUD",
-            "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE",
-            "GOLD", "MOON", "WAVE", "KITE", "BIRD", "LEAF", "GIFT", "TIME",
-            "PEAK", "CAMP", "FIRE", "PARK", "PATH", "BEAM", "GLOW", "RING"
+            "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
+
+        window.openGoogleDrivePicker = function() {
+            if (HAY_SCORE_FOLDER_ID === "YOUR_HAYSCORE_FOLDER_ID_HERE") {
+                showToast("Please set your HayScore Drive Folder ID in index.html line 224", "error");
+                return;
+            }
+            // Direct user to shared HayScore Google Drive folder link
+            window.open(`https://drive.google.com/drive/folders/${HAY_SCORE_FOLDER_ID}`, '_blank');
+        };
 
         window.showToast = function(message, type = 'info') {
             const container = document.getElementById('toast-container');
@@ -261,10 +265,7 @@
             
             container.appendChild(toast);
             
-            requestAnimationFrame(() => {
-                toast.classList.remove('-translate-y-10', 'opacity-0');
-            });
-            
+            requestAnimationFrame(() => toast.classList.remove('-translate-y-10', 'opacity-0'));
             setTimeout(() => {
                 toast.classList.add('opacity-0', '-translate-y-4');
                 setTimeout(() => toast.remove(), 300);
@@ -291,13 +292,11 @@
         function generateRoomCode() {
             const randomIndex = Math.floor(Math.random() * SAFE_WORD_CODES.length);
             roomCode = SAFE_WORD_CODES[randomIndex];
-            
             document.getElementById('host-room-code').innerText = roomCode;
             
             if (isFirebaseActive) {
                 const roomRef = ref(db, `rooms/${roomCode}`);
-                set(roomRef, { measure: 1, active: true, timestamp: Date.now() })
-                .catch(err => console.error("Database connection error:", err));
+                set(roomRef, { measure: 1, active: true, timestamp: Date.now() });
             }
         }
 
@@ -322,7 +321,6 @@
                             
                             populateStudentParts(currentXmlData);
                             
-                            // Listen for conductor measure updates
                             const measureRef = ref(db, `rooms/${input}/measure`);
                             onValue(measureRef, (snap) => {
                                 const measure = snap.val();
@@ -334,9 +332,6 @@
                     } else {
                         showToast('Room not found. Check code.', 'error');
                     }
-                }).catch(err => {
-                    showToast('Database error.', 'error');
-                    console.error(err);
                 });
             }
         };
@@ -370,7 +365,6 @@
             }
         }
 
-        // --- HOST FILE LOADING, FULL MULTI-TRACK MIDI PARSING & UPLOAD ---
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
 
@@ -396,7 +390,6 @@
                         const generatedXml = convertMidiToMusicXML(midi, file.name);
                         renderLoadedScore(generatedXml);
                     } catch (err) {
-                        console.error("MIDI Processing Error:", err);
                         showToast('Failed to parse MIDI file.', 'error');
                     }
                 };
@@ -410,18 +403,14 @@
             }
         }
 
-        // --- ROBUST FULL-LENGTH MIDI TO MUSICXML ENGINE ---
         function convertMidiToMusicXML(midi, songTitle) {
             const safeTitle = songTitle.replace(/\.[^/.]+$/, "");
             let xmlParts = '';
             let xmlPartList = '';
-            
-            // Standard time signatures
             const beatsPerMeasure = 4;
-            const divisions = 4; // 1 division = 16th note
+            const divisions = 4;
             const ticksPerMeasure = (midi.header.ppq || 480) * beatsPerMeasure;
 
-            // Find total measures in song
             let maxTicks = 0;
             midi.tracks.forEach(track => {
                 track.notes.forEach(note => {
@@ -432,95 +421,48 @@
             });
 
             const totalMeasures = Math.max(Math.ceil(maxTicks / ticksPerMeasure), 8);
-
             let validTrackCount = 0;
 
             midi.tracks.forEach((track, index) => {
-                if (track.notes.length === 0) return; // Ignore empty control tracks
+                if (track.notes.length === 0) return;
                 validTrackCount++;
-                
                 const partId = `P${validTrackCount}`;
                 const trackName = track.name || `Instrument ${validTrackCount}`;
                 
-                xmlPartList += `
-                <score-part id="${partId}">
-                    <part-name>${trackName}</part-name>
-                </score-part>`;
-
+                xmlPartList += `<score-part id="${partId}"><part-name>${trackName}</part-name></score-part>`;
                 let partMeasures = '';
 
-                // Build each measure explicitly for this instrument
                 for (let m = 0; m < totalMeasures; m++) {
                     const measureStartTick = m * ticksPerMeasure;
                     const measureEndTick = (m + 1) * ticksPerMeasure;
-
-                    // Get all notes landing in this measure window
                     const measureNotes = track.notes.filter(n => n.ticks >= measureStartTick && n.ticks < measureEndTick);
 
                     let measureXml = '';
                     let currentTickInMeasure = 0;
 
                     if (measureNotes.length === 0) {
-                        // Empty bar rest
-                        measureXml += `
-                        <note>
-                            <rest/>
-                            <duration>${beatsPerMeasure * divisions}</duration>
-                            <type>whole</type>
-                        </note>`;
+                        measureXml += `<note><rest/><duration>${beatsPerMeasure * divisions}</duration><type>whole</type></note>`;
                     } else {
-                        // Sort notes chronologically
                         measureNotes.sort((a, b) => a.ticks - b.ticks);
-
                         measureNotes.forEach(note => {
                             const noteTickInMeasure = note.ticks - measureStartTick;
-                            
-                            // Insert rest if there's a gap before this note
                             if (noteTickInMeasure > currentTickInMeasure) {
                                 const gapTicks = noteTickInMeasure - currentTickInMeasure;
                                 const gapDivisions = Math.max(1, Math.round((gapTicks / ticksPerMeasure) * (beatsPerMeasure * divisions)));
-                                measureXml += `
-                                <note>
-                                    <rest/>
-                                    <duration>${gapDivisions}</duration>
-                                    <type>quarter</type>
-                                </note>`;
+                                measureXml += `<note><rest/><duration>${gapDivisions}</duration><type>quarter</type></note>`;
                             }
 
-                            // Calculate Note Duration in XML Divisions
                             const durDivisions = Math.max(1, Math.round((note.durationTicks / ticksPerMeasure) * (beatsPerMeasure * divisions)));
-                            
-                            // Pitch calculations
                             const step = note.pitch.charAt(0);
                             const octave = note.octave;
                             const alter = note.pitch.includes('#') ? 1 : (note.pitch.includes('b') ? -1 : 0);
 
-                            measureXml += `
-                            <note>
-                                <pitch>
-                                    <step>${step}</step>
-                                    ${alter !== 0 ? `<alter>${alter}</alter>` : ''}
-                                    <octave>${octave}</octave>
-                                </pitch>
-                                <duration>${durDivisions}</duration>
-                                <type>quarter</type>
-                            </note>`;
-
+                            measureXml += `<note><pitch><step>${step}</step>${alter !== 0 ? `<alter>${alter}</alter>` : ''}<octave>${octave}</octave></pitch><duration>${durDivisions}</duration><type>quarter</type></note>`;
                             currentTickInMeasure = noteTickInMeasure + note.durationTicks;
                         });
                     }
 
-                    partMeasures += `
-                    <measure number="${m + 1}">
-                        ${m === 0 ? `
-                        <attributes>
-                            <divisions>${divisions}</divisions>
-                            <key><fifths>0</fifths></key>
-                            <time><beats>${beatsPerMeasure}</beats><beat-type>4</beat-type></time>
-                            <clef><sign>G</sign><line>2</line></clef>
-                        </attributes>` : ''}
-                        ${measureXml}
-                    </measure>`;
+                    partMeasures += `<measure number="${m + 1}">${m === 0 ? `<attributes><divisions>${divisions}</divisions><key><fifths>0</fifths></key><time><beats>${beatsPerMeasure}</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>` : ''}${measureXml}</measure>`;
                 }
 
                 xmlParts += `<part id="${partId}">${partMeasures}</part>`;
@@ -537,7 +479,6 @@
 
         async function renderLoadedScore(xmlContent) {
             currentXmlData = xmlContent;
-            
             try {
                 document.getElementById('drop-zone').classList.add('hidden-view');
                 document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
@@ -550,24 +491,18 @@
                 }, 200);
                 showToast('Score rendered successfully!', 'success');
             } catch (err) {
-                console.error("OSMD Render Error:", err);
                 showToast('Failed to draw sheet music.', 'error');
                 return; 
             }
             
             if (isFirebaseActive && roomCode) {
                 setTimeout(() => {
-                    showToast('Uploading score to sync engine...', 'info');
-                    set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData)
-                        .then(() => showToast('Score ready for students!', 'success'))
-                        .catch((err) => showToast('Cloud upload failed.', 'error'));
+                    set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData);
                 }, 500); 
             }
         }
 
-        // --- ACCURATE SINGLE MEASURE HIGHLIGHT ENGINE ---
         function highlightMeasure(osmdInstance, highlightBoxId, measureNumber, wrapperId) {
-            // Update Top Bar Displays on both views
             document.getElementById('host-bar-display').innerText = `Bar: ${measureNumber}`;
             document.getElementById('student-bar-display').innerText = `Bar: ${measureNumber}`;
 
@@ -584,7 +519,6 @@
 
             try {
                 const measureStaves = graphicSheet.measureList[measureIndex];
-                
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                 let validCount = 0;
 
@@ -625,7 +559,6 @@
                 highlightBox.style.height = `${height}px`;
                 highlightBox.classList.remove('hidden-view');
 
-                // Smooth Auto-Scroll to keep active bar visible
                 if (autoScrollEnabled && wrapperId) {
                     const wrapper = document.getElementById(wrapperId);
                     wrapper.scrollTo({
@@ -638,17 +571,11 @@
             }
         }
 
-        // --- CONDUCTOR CONTROLS (Click, Space, Left/Right Arrows) ---
         function setupHostClickInteractions() {
             const container = document.getElementById('osmd-host-container');
-            
-            // Click to move to next bar
-            container.addEventListener('click', (e) => {
-                advanceHostMeasure(currentMeasureNumber + 1);
-            });
+            container.addEventListener('click', () => advanceHostMeasure(currentMeasureNumber + 1));
         }
 
-        // Keyboard Shortcuts (Space, Right Arrow, Left Arrow)
         document.addEventListener('keydown', (e) => {
             if (currentView === 'host') {
                 if (e.code === 'Space' || e.code === 'ArrowRight') {
@@ -663,25 +590,19 @@
 
         function advanceHostMeasure(targetMeasure) {
             if (!osmdHost || !osmdHost.graphic) return;
-            
             const totalMeasures = osmdHost.graphic.measureList.length;
             
-            // Loop back or clamp boundaries
             if (targetMeasure > totalMeasures) targetMeasure = 1;
             if (targetMeasure < 1) targetMeasure = totalMeasures;
             
             currentMeasureNumber = targetMeasure;
-            
-            // Draw highlight rectangle on conductor measure
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             
-            // Broadcast new measure number to Firebase
             if (isFirebaseActive && roomCode) {
                 set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
             }
         }
 
-        // --- STUDENT PARSING & SYNC ---
         window.populateStudentParts = function(xmlString) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlString, "text/xml");
@@ -716,27 +637,21 @@
             
             await osmdStudent.load(currentXmlData);
             
-            // Isolate selected part by setting visibility flags
             for(let i=0; i < osmdStudent.sheet.Instruments.length; i++) {
                 osmdStudent.sheet.Instruments[i].Visible = (i === index);
             }
             
             osmdStudent.render();
-            setTimeout(() => {
-                syncToMeasure(currentMeasureNumber);
-            }, 200);
+            setTimeout(() => syncToMeasure(currentMeasureNumber), 200);
             showToast('Ready to play.', 'success');
         };
 
         function syncToMeasure(measureNumber) {
             currentMeasureNumber = measureNumber;
             if (!osmdStudent || !osmdStudent.graphic) return;
-            
-            // Draw highlight rectangle on single student measure
             highlightMeasure(osmdStudent, 'student-highlight-box', measureNumber, 'osmd-student-wrapper');
         }
 
-        // --- STUDENT HELPER ACTIONS ---
         window.transposeStudent = function(semitones) {
             showToast(`Transposing octave...`, 'info');
         };
