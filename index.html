@@ -390,21 +390,22 @@
             reader.onload = async function(e) {
                 currentXmlData = e.target.result;
                 
-                // STEP 1: Render locally FIRST (Isolated from Firebase)
                 try {
-                    await osmdHost.load(currentXmlData);
-                    osmdHost.render();
-                    
+                    // STEP 1: Unhide the container FIRST so it has a physical width
                     document.getElementById('drop-zone').classList.add('hidden-view');
                     document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
+                    
+                    // STEP 2: Load and Render the music
+                    await osmdHost.load(currentXmlData);
+                    osmdHost.render();
                     showToast('Score rendered on screen.', 'success');
                 } catch (err) {
                     console.error("OSMD Render Error:", err);
                     showToast('Failed to draw sheet music.', 'error');
-                    return; // Stop here if it cannot draw locally
+                    return; 
                 }
                 
-                // STEP 2: Upload to Firebase SECOND in the background
+                // STEP 3: Upload to Firebase
                 if (isFirebaseActive && roomCode) {
                     setTimeout(() => {
                         showToast('Uploading score to sync engine...', 'info');
@@ -414,7 +415,7 @@
                                 console.error("Firebase Upload Error:", err);
                                 showToast('Cloud upload failed.', 'error');
                             });
-                    }, 500); // Give the browser half a second to finish drawing before uploading
+                    }, 500); 
                 }
             };
             reader.readAsText(file);
