@@ -189,7 +189,7 @@
     <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v1.7.0 • Updated: 21 Sep 2026, 09:20 AEST (Sydney)</div>
+        <div>v1.8.0 • Updated: 21 Sep 2026, 09:28 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -370,7 +370,7 @@
             }
         }
 
-        // --- HOST FILE LOADING, MIDI PARSING & UPLOAD ---
+        // --- HOST FILE LOADING, FULL MULTI-TRACK MIDI PARSING & UPLOAD ---
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
 
@@ -388,7 +388,6 @@
             showToast('Processing file...', 'info');
 
             if (fileName.endsWith('.mid') || fileName.endsWith('.midi')) {
-                // Read binary MIDI file
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     try {
@@ -403,7 +402,6 @@
                 };
                 reader.readAsArrayBuffer(file);
             } else {
-                // Standard MusicXML file
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     renderLoadedScore(e.target.result);
@@ -412,17 +410,37 @@
             }
         }
 
-        // --- MIDI TO MUSICXML CONVERTER ---
+        // --- ROBUST FULL-LENGTH MIDI TO MUSICXML ENGINE ---
         function convertMidiToMusicXML(midi, songTitle) {
             const safeTitle = songTitle.replace(/\.[^/.]+$/, "");
             let xmlParts = '';
             let xmlPartList = '';
+            
+            // Standard time signatures
+            const beatsPerMeasure = 4;
+            const divisions = 4; // 1 division = 16th note
+            const ticksPerMeasure = (midi.header.ppq || 480) * beatsPerMeasure;
+
+            // Find total measures in song
+            let maxTicks = 0;
+            midi.tracks.forEach(track => {
+                track.notes.forEach(note => {
+                    if (note.ticks + note.durationTicks > maxTicks) {
+                        maxTicks = note.ticks + note.durationTicks;
+                    }
+                });
+            });
+
+            const totalMeasures = Math.max(Math.ceil(maxTicks / ticksPerMeasure), 8);
+
+            let validTrackCount = 0;
 
             midi.tracks.forEach((track, index) => {
-                if (track.notes.length === 0) return; // Skip empty tracks
+                if (track.notes.length === 0) return; // Ignore empty control tracks
+                validTrackCount++;
                 
-                const partId = `P${index + 1}`;
-                const trackName = track.name || `Instrument ${index + 1}`;
+                const partId = `P${validTrackCount}`;
+                const trackName = track.name || `Instrument ${validTrackCount}`;
                 
                 xmlPartList += `
                 <score-part id="${partId}">
@@ -430,58 +448,78 @@
                 </score-part>`;
 
                 let partMeasures = '';
-                let currentMeasure = 1;
-                let measureNotes = '';
-                let measureTime = 0; // seconds
 
-                // Sort notes by start time
-                const sortedNotes = track.notes.sort((a, b) => a.time - b.time);
+                // Build each measure explicitly for this instrument
+                for (let m = 0; m < totalMeasures; m++) {
+                    const measureStartTick = m * ticksPerMeasure;
+                    const measureEndTick = (m + 1) * ticksPerMeasure;
 
-                sortedNotes.forEach((note) => {
-                    const step = note.pitch.charAt(0);
-                    const octave = note.octave;
-                    const alter = note.pitch.includes('#') ? 1 : (note.pitch.includes('b') ? -1 : 0);
+                    // Get all notes landing in this measure window
+                    const measureNotes = track.notes.filter(n => n.ticks >= measureStartTick && n.ticks < measureEndTick);
 
-                    measureNotes += `
-                    <note>
-                        <pitch>
-                            <step>${step}</step>
-                            ${alter !== 0 ? `<alter>${alter}</alter>` : ''}
-                            <octave>${octave}</octave>
-                        </pitch>
-                        <duration>1</duration>
-                        <type>quarter</type>
-                    </note>`;
+                    let measureXml = '';
+                    let currentTickInMeasure = 0;
 
-                    // Wrap into a measure every 4 notes for standard playback
-                    if (measureNotes.split('<note>').length - 1 >= 4) {
-                        partMeasures += `
-                        <measure number="${currentMeasure}">
-                            ${currentMeasure === 1 ? `
-                            <attributes>
-                                <divisions>1</divisions>
-                                <key><fifths>0</fifths></key>
-                                <time><beats>4</beats><beat-type>4</beat-type></time>
-                                <clef><sign>G</sign><line>2</line></clef>
-                            </attributes>` : ''}
-                            ${measureNotes}
-                        </measure>`;
-                        currentMeasure++;
-                        measureNotes = '';
+                    if (measureNotes.length === 0) {
+                        // Empty bar rest
+                        measureXml += `
+                        <note>
+                            <rest/>
+                            <duration>${beatsPerMeasure * divisions}</duration>
+                            <type>whole</type>
+                        </note>`;
+                    } else {
+                        // Sort notes chronologically
+                        measureNotes.sort((a, b) => a.ticks - b.ticks);
+
+                        measureNotes.forEach(note => {
+                            const noteTickInMeasure = note.ticks - measureStartTick;
+                            
+                            // Insert rest if there's a gap before this note
+                            if (noteTickInMeasure > currentTickInMeasure) {
+                                const gapTicks = noteTickInMeasure - currentTickInMeasure;
+                                const gapDivisions = Math.max(1, Math.round((gapTicks / ticksPerMeasure) * (beatsPerMeasure * divisions)));
+                                measureXml += `
+                                <note>
+                                    <rest/>
+                                    <duration>${gapDivisions}</duration>
+                                    <type>quarter</type>
+                                </note>`;
+                            }
+
+                            // Calculate Note Duration in XML Divisions
+                            const durDivisions = Math.max(1, Math.round((note.durationTicks / ticksPerMeasure) * (beatsPerMeasure * divisions)));
+                            
+                            // Pitch calculations
+                            const step = note.pitch.charAt(0);
+                            const octave = note.octave;
+                            const alter = note.pitch.includes('#') ? 1 : (note.pitch.includes('b') ? -1 : 0);
+
+                            measureXml += `
+                            <note>
+                                <pitch>
+                                    <step>${step}</step>
+                                    ${alter !== 0 ? `<alter>${alter}</alter>` : ''}
+                                    <octave>${octave}</octave>
+                                </pitch>
+                                <duration>${durDivisions}</duration>
+                                <type>quarter</type>
+                            </note>`;
+
+                            currentTickInMeasure = noteTickInMeasure + note.durationTicks;
+                        });
                     }
-                });
 
-                if (measureNotes !== '') {
                     partMeasures += `
-                    <measure number="${currentMeasure}">
-                        ${currentMeasure === 1 ? `
+                    <measure number="${m + 1}">
+                        ${m === 0 ? `
                         <attributes>
-                            <divisions>1</divisions>
+                            <divisions>${divisions}</divisions>
                             <key><fifths>0</fifths></key>
-                            <time><beats>4</beats><beat-type>4</beat-type></time>
+                            <time><beats>${beatsPerMeasure}</beats><beat-type>4</beat-type></time>
                             <clef><sign>G</sign><line>2</line></clef>
                         </attributes>` : ''}
-                        ${measureNotes}
+                        ${measureXml}
                     </measure>`;
                 }
 
