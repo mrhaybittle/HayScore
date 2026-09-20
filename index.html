@@ -1,12 +1,350 @@
-function handleFiles(files) {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HaySync</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://unpkg.com/opensheetmusicdisplay"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b; /* zinc-950 */
+            color: #f4f4f5; /* zinc-100 */
+        }
+        
+        /* Custom scrollbar */
+        .osmd-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .osmd-scroll::-webkit-scrollbar-track {
+            background: #18181b; 
+        }
+        .osmd-scroll::-webkit-scrollbar-thumb {
+            background: #3f3f46; 
+            border-radius: 4px;
+        }
+        .osmd-scroll::-webkit-scrollbar-thumb:hover {
+            background: #dc2626; 
+        }
+        .hidden-view {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-zinc-950 text-zinc-100">
+
+    <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 transition-all duration-300 pointer-events-none"></div>
+
+    <div id="view-home" class="flex-1 flex flex-col items-center justify-center p-6 transition-opacity duration-300 relative">
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-900/20 via-zinc-950 to-zinc-950 pointer-events-none"></div>
+        
+        <div class="text-center mb-16 relative z-10">
+            <h1 class="text-6xl font-bold text-red-600 mb-4 tracking-tight drop-shadow-lg">
+                <i class="fa-solid fa-music mr-3"></i>HaySync
+            </h1>
+            <p class="text-lg text-zinc-400 max-w-md mx-auto">Real-time sheet music synchronization.</p>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row gap-6 w-full max-w-2xl relative z-10">
+            <!-- Host Button -->
+            <button onclick="switchView('host')" class="flex-1 bg-zinc-900 hover:bg-zinc-800 border-2 border-red-900 hover:border-red-600 text-zinc-100 rounded-xl p-8 shadow-2xl transition-all flex flex-col items-center gap-4 group">
+                <div class="bg-red-600/10 p-4 rounded-full group-hover:bg-red-600/20 transition-colors">
+                    <i class="fa-solid fa-chalkboard-user text-4xl text-red-500"></i>
+                </div>
+                <span class="text-2xl font-bold">Host Rehearsal</span>
+                <span class="text-sm text-zinc-500">Load music, control the session</span>
+            </button>
+            
+            <!-- Student Button -->
+            <button onclick="switchView('student')" class="flex-1 bg-zinc-900 hover:bg-zinc-800 border-2 border-zinc-800 hover:border-red-600 text-zinc-100 rounded-xl p-8 shadow-2xl transition-all flex flex-col items-center gap-4 group">
+                <div class="bg-zinc-800 p-4 rounded-full group-hover:bg-red-600/20 transition-colors">
+                    <i class="fa-solid fa-users text-4xl text-zinc-400 group-hover:text-red-500 transition-colors"></i>
+                </div>
+                <span class="text-2xl font-bold">Join Session</span>
+                <span class="text-sm text-zinc-500">Enter code, follow along</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- HOST VIEW -->
+    <div id="view-host" class="hidden-view flex-1 flex flex-col h-full bg-zinc-950 relative">
+        <header class="bg-zinc-900 border-b border-red-900 p-4 flex flex-wrap items-center justify-between shadow-md z-10">
+            <div class="flex items-center gap-4">
+                <button onclick="switchView('home')" class="p-2 hover:bg-red-600/20 text-zinc-400 hover:text-red-500 rounded-lg transition" title="Leave">
+                    <i class="fa-solid fa-arrow-left text-xl"></i>
+                </button>
+                <h2 class="text-xl font-bold text-zinc-100">Conductor</h2>
+                <span class="text-xs text-zinc-500 hidden sm:inline ml-4 border border-zinc-700 rounded px-2 py-1">Press Spacebar to advance cursor</span>
+            </div>
+            
+            <div class="flex items-center gap-4 mt-2 sm:mt-0">
+                <div class="bg-black px-4 py-2 rounded-lg border border-red-900/50 shadow-inner">
+                    <span class="text-zinc-500 text-sm uppercase tracking-wider mr-2">Room Code:</span>
+                    <span id="host-room-code" class="text-2xl font-bold text-red-500 tracking-widest font-mono">----</span>
+                </div>
+            </div>
+        </header>
+
+        <div id="drop-zone" class="flex-1 flex flex-col items-center justify-center p-8 bg-zinc-900/50 border-4 border-dashed border-zinc-700 m-8 rounded-2xl transition-colors hover:border-red-600 hover:bg-red-950/20">
+            <i class="fa-solid fa-file-audio text-6xl text-red-600 mb-6 drop-shadow-md"></i>
+            <h3 class="text-3xl font-bold text-zinc-100 mb-2">Load MusicXML</h3>
+            <p class="text-zinc-400 mb-8 text-lg">Drag & drop file here, or click below</p>
+            <input type="file" id="file-input" accept=".musicxml,.xml" class="hidden">
+            <button onclick="document.getElementById('file-input').click()" class="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg shadow-lg shadow-red-900/50 transition font-bold text-lg">
+                Browse Files
+            </button>
+        </div>
+
+        <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
+            <div id="osmd-host-container" class="w-full min-h-full cursor-pointer"></div>
+        </div>
+    </div>
+
+    <!-- STUDENT VIEW -->
+    <div id="view-student" class="hidden-view flex-1 flex flex-col h-full bg-zinc-950">
+        <header class="bg-zinc-900 border-b border-zinc-800 p-3 sm:p-4 flex flex-col lg:flex-row items-center justify-between shadow-md z-10 gap-4">
+            <div class="flex items-center gap-3 w-full lg:w-auto">
+                <button onclick="switchView('home')" class="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                
+                <div class="flex bg-black border border-zinc-700 rounded-lg overflow-hidden flex-1 sm:flex-none">
+                    <input type="text" id="join-code-input" placeholder="CODE" class="bg-transparent text-white placeholder-zinc-600 px-4 py-2 outline-none w-28 font-mono font-bold tracking-widest uppercase text-center" maxlength="4">
+                    <button onclick="joinRehearsal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 font-bold transition">Join</button>
+                </div>
+            </div>
+
+            <div id="student-controls" class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto opacity-50 pointer-events-none transition-opacity">
+                <!-- Dropdown pulses red to prompt student to select an instrument -->
+                <div class="relative flex-1 sm:flex-none">
+                    <select id="part-selector" onchange="selectPart(this.value)" class="appearance-none w-full bg-zinc-800 border-2 border-red-500 text-white px-4 py-2 pr-10 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer animate-pulse">
+                        <option value="" disabled selected>Select Your Part...</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-zinc-400 pointer-events-none"></i>
+                </div>
+                
+                <div class="flex bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden">
+                    <button onclick="transposeStudent(-12)" class="px-3 py-2 hover:bg-zinc-700 transition text-sm font-medium border-r border-zinc-700 text-zinc-300 hover:text-white" title="Down 1 Octave">
+                        <i class="fa-solid fa-minus text-red-500 mr-1"></i> 8vb
+                    </button>
+                    <button onclick="transposeStudent(12)" class="px-3 py-2 hover:bg-zinc-700 transition text-sm font-medium text-zinc-300 hover:text-white" title="Up 1 Octave">
+                        <i class="fa-solid fa-plus text-red-500 mr-1"></i> 8va
+                    </button>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium">
+                        <i class="fa-solid fa-angles-down mr-1"></i> Auto-Scroll
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-auto p-4 bg-zinc-950 flex items-center justify-center relative z-0" id="student-placeholder">
+            <div class="text-center text-zinc-600">
+                <i class="fa-solid fa-music text-8xl mb-6 opacity-20"></i>
+                <p class="text-xl font-medium">Enter a room code to sync with the conductor.</p>
+            </div>
+        </div>
+        
+        <div id="osmd-student-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-6 bg-zinc-950">
+            <div id="osmd-student-container" class="w-full min-h-full"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+        // Corrected Firebase Config (Using haysync database URL and NO auth requirements for open test mode)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBAJSw8QFuzMoCXqZY2wmO3Nmy2Fdy6Q4U",
+            authDomain: "haysync-9b816.firebaseapp.com",
+            databaseURL: "https://haysync-9b816-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "haysync-9b816",
+            storageBucket: "haysync-9b816.firebasestorage.app",
+            messagingSenderId: "717730658604",
+            appId: "1:717730658604:web:e09a312b2ac7c8426e9489",
+            measurementId: "G-B9M5VTMB4B"
+        };
+            
+        let app, db;
+        let isFirebaseActive = false;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+            isFirebaseActive = true;
+            console.log("Firebase initialized");
+        } catch(e) {
+            console.log("Firebase config error.");
+        }
+
+        // Global State
+        let currentView = 'home';
+        let osmdHost = null;
+        let osmdStudent = null;
+        let roomCode = "";
+        let currentXmlData = null; 
+        
+        // Student State
+        let studentTransposeAmount = 0;
+        let autoScrollEnabled = true;
+        let syncedMeasure = 1;
+
+        window.showToast = function(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let styleClasses = 'bg-zinc-800 border border-zinc-700 text-zinc-100';
+            let icon = 'fa-info-circle text-zinc-400';
+            
+            if(type === 'error') {
+                styleClasses = 'bg-red-950 border border-red-800 text-red-100';
+                icon = 'fa-circle-exclamation text-red-500';
+            }
+            if(type === 'success') {
+                styleClasses = 'bg-zinc-900 border border-red-600 text-zinc-100 shadow-[0_0_15px_rgba(220,38,38,0.3)]';
+                icon = 'fa-check-circle text-red-500';
+            }
+            
+            toast.className = `${styleClasses} px-6 py-3 rounded-xl shadow-2xl font-medium text-sm flex items-center gap-3 transform -translate-y-10 opacity-0 transition-all duration-300 pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i> ${message}`;
+            
+            container.appendChild(toast);
+            
+            requestAnimationFrame(() => {
+                toast.classList.remove('-translate-y-10', 'opacity-0');
+            });
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-4');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        window.switchView = function(viewName) {
+            document.getElementById('view-home').classList.add('hidden-view');
+            document.getElementById('view-host').classList.add('hidden-view');
+            document.getElementById('view-student').classList.add('hidden-view');
+            
+            document.getElementById(`view-${viewName}`).classList.remove('hidden-view');
+            currentView = viewName;
+            
+            if (viewName === 'host' && !roomCode) {
+                generateRoomCode();
+                initHostOSMD();
+            }
+            if (viewName === 'student') {
+                initStudentOSMD();
+            }
+        };
+
+        function generateRoomCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            roomCode = '';
+            for (let i = 0; i < 4; i++) {
+                roomCode += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            document.getElementById('host-room-code').innerText = roomCode;
+            
+            if (isFirebaseActive) {
+                const roomRef = ref(db, `rooms/${roomCode}`);
+                set(roomRef, { measure: 1, active: true, timestamp: Date.now() })
+                .catch(err => console.error("Database connection error:", err));
+            }
+        }
+
+        window.joinRehearsal = function() {
+            const input = document.getElementById('join-code-input').value.toUpperCase();
+            if (input.length !== 4) {
+                showToast('Please enter a valid 4-character code.', 'error');
+                return;
+            }
+            
+            showToast(`Connecting to ${input}...`, 'info');
+            
+            if (isFirebaseActive) {
+                const roomRef = ref(db, `rooms/${input}`);
+                get(roomRef).then((snapshot) => {
+                    if (snapshot.exists()) {
+                        const roomData = snapshot.val();
+                        if (roomData.xmlData) {
+                            currentXmlData = roomData.xmlData;
+                            document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
+                            showToast(`Score downloaded! Please select your part.`, 'success');
+                            
+                            populateStudentParts(currentXmlData);
+                            
+                            // Listen for conductor measure updates
+                            const measureRef = ref(db, `rooms/${input}/measure`);
+                            onValue(measureRef, (snap) => {
+                                const measure = snap.val();
+                                if(measure) syncToMeasure(measure);
+                            });
+                        } else {
+                            showToast('Room exists, but host has not loaded music yet.', 'error');
+                        }
+                    } else {
+                        showToast('Room not found. Check code.', 'error');
+                    }
+                }).catch(err => {
+                    showToast('Database error.', 'error');
+                    console.error(err);
+                });
+            }
+        };
+
+        function initHostOSMD() {
+            if (!osmdHost && window.opensheetmusicdisplay) {
+                const container = document.getElementById('osmd-host-container');
+                osmdHost = new window.opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
+                    autoResize: true,
+                    backend: "svg",
+                    drawTitle: true,
+                    drawPartNames: true,
+                    darkMode: true, 
+                    defaultColorMusic: "#e4e4e7"
+                });
+                setupHostClickInteractions();
+            }
+        }
+
+        function initStudentOSMD() {
+            if (!osmdStudent && window.opensheetmusicdisplay) {
+                const container = document.getElementById('osmd-student-container');
+                osmdStudent = new window.opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
+                    autoResize: true,
+                    backend: "svg",
+                    drawTitle: false,
+                    drawPartNames: false,
+                    darkMode: true,
+                    defaultColorMusic: "#e4e4e7"
+                });
+            }
+        }
+
+        // --- HOST FILE LOADING & UPLOAD LOGIC ---
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, e => e.preventDefault(), false));
+        ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.add('border-red-600', 'bg-red-900/20'), false));
+        ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-red-600', 'bg-red-900/20'), false));
+        dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files), false);
+
+        function handleFiles(files) {
             if (files.length === 0) return;
             const file = files[0];
             
-            if (!file.name.endsWith('.musicxml') && !file.name.endsWith('.xml')) {
-                showToast('Invalid file. Use .musicxml', 'error');
-                return;
-            }
-
             showToast('Processing score...', 'info');
             const reader = new FileReader();
             
@@ -14,13 +352,13 @@ function handleFiles(files) {
                 currentXmlData = e.target.result;
                 
                 try {
-                    // STEP 1: Unhide the container FIRST so it has a physical width
+                    // Unhide first so OSMD has width to draw into
                     document.getElementById('drop-zone').classList.add('hidden-view');
                     document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
                     
-                    // STEP 2: Load and Render the music
                     await osmdHost.load(currentXmlData);
                     osmdHost.render();
+                    osmdHost.cursor.show(); // Turn on the Conductor Highlighter
                     showToast('Score rendered on screen.', 'success');
                 } catch (err) {
                     console.error("OSMD Render Error:", err);
@@ -28,18 +366,128 @@ function handleFiles(files) {
                     return; 
                 }
                 
-                // STEP 3: Upload to Firebase
                 if (isFirebaseActive && roomCode) {
                     setTimeout(() => {
                         showToast('Uploading score to sync engine...', 'info');
                         set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData)
                             .then(() => showToast('Score ready for students!', 'success'))
-                            .catch((err) => {
-                                console.error("Firebase Upload Error:", err);
-                                showToast('Cloud upload failed.', 'error');
-                            });
+                            .catch((err) => showToast('Cloud upload failed.', 'error'));
                     }, 500); 
                 }
             };
             reader.readAsText(file);
         }
+
+        // --- HOST HIGHLIGHTER CONTROLS ---
+        function setupHostClickInteractions() {
+            const container = document.getElementById('osmd-host-container');
+            // Advance cursor on click
+            container.addEventListener('click', (e) => advanceHostCursor());
+        }
+
+        // Advance cursor on Spacebar
+        document.addEventListener('keydown', (e) => {
+            if (currentView === 'host' && e.code === 'Space') {
+                e.preventDefault();
+                advanceHostCursor();
+            }
+        });
+
+        function advanceHostCursor() {
+            if(!osmdHost || !osmdHost.cursor) return;
+            osmdHost.cursor.next(); // Moves the blue highlight
+            
+            // Get current measure number (Index starts at 0, so add 1)
+            let currentMeasure = osmdHost.cursor.iterator.currentMeasureIndex + 1;
+            
+            // Push to Firebase so students jump to it
+            if(isFirebaseActive && roomCode) {
+                set(ref(db, `rooms/${roomCode}/measure`), currentMeasure);
+            }
+        }
+
+
+        // --- STUDENT PARSING & HIGHLIGHTER SYNC ---
+        window.populateStudentParts = function(xmlString) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+            const partList = xmlDoc.getElementsByTagName("score-part");
+            
+            const selector = document.getElementById('part-selector');
+            selector.innerHTML = '<option value="" disabled selected>Select Your Part...</option>';
+            
+            for(let i=0; i < partList.length; i++) {
+                let name = `Part ${i+1}`;
+                const nameNode = partList[i].getElementsByTagName("part-name")[0];
+                if(nameNode) name = nameNode.textContent;
+                
+                const opt = document.createElement('option');
+                opt.value = i; 
+                opt.text = name;
+                selector.appendChild(opt);
+            }
+        };
+
+        window.selectPart = async function(partIndexStr) {
+            if(!currentXmlData) return;
+            const index = parseInt(partIndexStr);
+            
+            // Remove the pulsing red prompt
+            document.getElementById('part-selector').classList.remove('animate-pulse', 'border-red-500');
+            document.getElementById('part-selector').classList.add('border-zinc-700');
+            
+            showToast('Loading your part...', 'info');
+            document.getElementById('student-placeholder').classList.add('hidden-view');
+            const wrapper = document.getElementById('osmd-student-wrapper');
+            wrapper.classList.remove('hidden-view');
+            
+            await osmdStudent.load(currentXmlData);
+            
+            // Isolate the part: Hide all other instruments
+            for(let i=0; i < osmdStudent.sheet.Instruments.length; i++) {
+                osmdStudent.sheet.Instruments[i].Visible = (i === index);
+            }
+            
+            osmdStudent.render();
+            osmdStudent.cursor.show();
+            syncToMeasure(syncedMeasure); // Snap cursor to Conductor's current position
+            showToast('Ready to play.', 'success');
+        };
+
+        function syncToMeasure(measureNumber) {
+            if(!osmdStudent || !osmdStudent.cursor) return;
+            syncedMeasure = measureNumber;
+            
+            // Reset student cursor to beginning, then step it forward to match conductor
+            osmdStudent.cursor.reset();
+            for(let i = 1; i < measureNumber; i++) {
+                osmdStudent.cursor.next();
+            }
+            
+            // Quick visual flash of the screen border so student knows they moved forward
+            const wrap = document.getElementById('osmd-student-wrapper');
+            wrap.style.boxShadow = 'inset 0 0 20px rgba(220, 38, 38, 0.5)';
+            setTimeout(() => wrap.style.boxShadow = 'none', 300);
+        }
+
+        // --- EXTRA STUDENT CONTROLS ---
+        window.transposeStudent = function(semitones) {
+            showToast(`Transposition logic requires pitch manipulation plugin in OSMD. (Placeholder)`, 'info');
+        };
+
+        window.toggleAutoScroll = function() {
+            autoScrollEnabled = !autoScrollEnabled;
+            const btn = document.getElementById('btn-autoscroll');
+            if(autoScrollEnabled) {
+                btn.classList.add('bg-red-600', 'text-white');
+                btn.classList.remove('bg-zinc-800', 'text-zinc-400');
+                showToast('Auto-scroll enabled');
+            } else {
+                btn.classList.remove('bg-red-600', 'text-white');
+                btn.classList.add('bg-zinc-800', 'text-zinc-400');
+                showToast('Auto-scroll disabled');
+            }
+        };
+    </script>
+</body>
+</html>
