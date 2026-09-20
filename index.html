@@ -264,16 +264,19 @@
             }
             document.getElementById('host-room-code').innerText = roomCode;
             
-            // Firebase setup for this room
-            if(isFirebaseActive) {
-                signInAnonymously(auth).then(() => {
-                    const roomRef = ref(db, `rooms/${roomCode}`);
-                    set(roomRef, {
-                        measure: 1,
-                        active: true,
-                        timestamp: Date.now()
-                    });
-                }).catch(err => console.error("Auth error", err));
+            // Bypass Auth and talk directly to the Database
+            if (isFirebaseActive) {
+                const roomRef = ref(db, `rooms/${roomCode}`);
+                set(roomRef, {
+                    measure: 1,
+                    active: true,
+                    timestamp: Date.now()
+                }).then(() => {
+                    console.log("Room created successfully in database.");
+                }).catch(err => {
+                    console.error("Database connection error:", err);
+                    showToast('Failed to connect to database.', 'error');
+                });
             }
         }
 
