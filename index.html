@@ -44,7 +44,7 @@
             border: 2px solid #ef4444 !important;
             border-radius: 4px;
             pointer-events: none; /* Mouse clicks pass through directly to score */
-            transition: all 0.1s ease-out;
+            transition: all 0.12s ease-out;
             box-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
             z-index: 30;
             mix-blend-mode: screen; /* Keeps white sheet music notes completely visible */
@@ -95,7 +95,7 @@
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100">Conductor</h2>
-                <span class="text-xs text-zinc-500 hidden sm:inline ml-4 border border-zinc-700 rounded px-2 py-1">Click measure or press Spacebar to advance bar highlight</span>
+                <span class="text-xs text-zinc-500 hidden sm:inline ml-4 border border-zinc-700 rounded px-2 py-1">Use Left/Right Arrows or Spacebar to change bar</span>
             </div>
             
             <div class="flex items-center gap-4 mt-2 sm:mt-0">
@@ -177,7 +177,7 @@
     <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v1.3.0 • Updated: 21 Sep 2026, 08:52 AEST (Sydney)</div>
+        <div>v1.4.0 • Updated: 21 Sep 2026, 09:05 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -377,7 +377,6 @@
                     await osmdHost.load(currentXmlData);
                     osmdHost.render();
                     
-                    // Draw single-measure highlight on bar 1
                     setTimeout(() => {
                         highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
                     }, 200);
@@ -400,12 +399,12 @@
             reader.readAsText(file);
         }
 
-        // --- SINGLE EXACT MEASURE HIGHLIGHT ENGINE ---
+        // --- ACCURATE SINGLE MEASURE HIGHLIGHT ENGINE ---
         function highlightMeasure(osmdInstance, highlightBoxId, measureNumber, wrapperId) {
             const highlightBox = document.getElementById(highlightBoxId);
             if (!osmdInstance || !osmdInstance.graphic) return;
 
-            const measureIndex = measureNumber - 1; // 0-indexed internally
+            const measureIndex = measureNumber - 1; 
             const graphicSheet = osmdInstance.graphic;
             
             if (!graphicSheet.measureList || !graphicSheet.measureList[measureIndex]) {
@@ -414,21 +413,21 @@
             }
 
             try {
-                // Get staves for the EXACT single measure requested
+                // Get all visible staff measures for the specific target measure index
                 const measureStaves = graphicSheet.measureList[measureIndex];
                 
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
                 let validCount = 0;
 
                 measureStaves.forEach(stave => {
-                    if (stave && stave.PositionAndShape) {
+                    // Check if stave measure is valid and visible in current rendering
+                    if (stave && stave.stave && stave.stave.rendered !== false && stave.PositionAndShape) {
                         const pos = stave.PositionAndShape;
                         const absPos = pos.AbsolutePosition;
                         const size = pos.Size;
 
                         if (absPos && size) {
                             validCount++;
-                            // Scale coordinates from internal units to screen pixels (factor of 10)
                             const x = absPos.x * 10;
                             const y = absPos.y * 10;
                             const w = size.width * 10;
@@ -447,7 +446,6 @@
                     return;
                 }
 
-                // Fine-tune bounding dimensions for perfect fit around the single measure
                 const top = Math.max(0, minY - 10);
                 const left = Math.max(0, minX - 2);
                 const width = Math.max(maxX - minX + 4, 30);
@@ -472,21 +470,26 @@
             }
         }
 
-        // --- CONDUCTOR CONTROLS ---
+        // --- CONDUCTOR CONTROLS (Click, Space, Left/Right Arrows) ---
         function setupHostClickInteractions() {
             const container = document.getElementById('osmd-host-container');
             
-            // Advance measure on clicking anywhere on the score
+            // Click to move to next bar
             container.addEventListener('click', (e) => {
                 advanceHostMeasure(currentMeasureNumber + 1);
             });
         }
 
-        // Advance measure on Spacebar
+        // Keyboard Shortcuts (Space, Right Arrow, Left Arrow)
         document.addEventListener('keydown', (e) => {
-            if (currentView === 'host' && e.code === 'Space') {
-                e.preventDefault();
-                advanceHostMeasure(currentMeasureNumber + 1);
+            if (currentView === 'host') {
+                if (e.code === 'Space' || e.code === 'ArrowRight') {
+                    e.preventDefault();
+                    advanceHostMeasure(currentMeasureNumber + 1);
+                } else if (e.code === 'ArrowLeft') {
+                    e.preventDefault();
+                    advanceHostMeasure(currentMeasureNumber - 1);
+                }
             }
         });
 
@@ -494,11 +497,14 @@
             if (!osmdHost || !osmdHost.graphic) return;
             
             const totalMeasures = osmdHost.graphic.measureList.length;
-            if (targetMeasure > totalMeasures) targetMeasure = 1; // Loop back to start if past end
+            
+            // Loop back or clamp boundaries
+            if (targetMeasure > totalMeasures) targetMeasure = 1;
+            if (targetMeasure < 1) targetMeasure = totalMeasures;
             
             currentMeasureNumber = targetMeasure;
             
-            // Draw highlight rectangle on single conductor measure
+            // Draw highlight rectangle on conductor measure
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             
             // Broadcast new measure number to Firebase
@@ -542,7 +548,7 @@
             
             await osmdStudent.load(currentXmlData);
             
-            // Isolate selected part
+            // Isolate selected part by setting visibility flags
             for(let i=0; i < osmdStudent.sheet.Instruments.length; i++) {
                 osmdStudent.sheet.Instruments[i].Visible = (i === index);
             }
