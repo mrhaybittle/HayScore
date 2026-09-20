@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HaySync</title>
+    <title>HayScore</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -61,7 +61,7 @@
         
         <div class="text-center mb-16 relative z-10">
             <h1 class="text-6xl font-bold text-red-600 mb-4 tracking-tight drop-shadow-lg">
-                <i class="fa-solid fa-music mr-3"></i>HaySync
+                <i class="fa-solid fa-music mr-3"></i>HayScore
             </h1>
             <p class="text-lg text-zinc-400 max-w-md mx-auto">Real-time sheet music synchronization.</p>
         </div>
@@ -89,18 +89,23 @@
 
     <!-- HOST VIEW -->
     <div id="view-host" class="hidden-view flex-1 flex flex-col h-full bg-zinc-950 relative">
-        <header class="bg-zinc-900 border-b border-red-900 p-4 flex flex-wrap items-center justify-between shadow-md z-10">
+        <header class="bg-zinc-900 border-b border-red-900 p-4 flex items-center justify-between shadow-md z-10 relative">
             <div class="flex items-center gap-4">
                 <button onclick="switchView('home')" class="p-2 hover:bg-red-600/20 text-zinc-400 hover:text-red-500 rounded-lg transition" title="Leave">
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100">Conductor</h2>
-                <span class="text-xs text-zinc-500 hidden sm:inline ml-4 border border-zinc-700 rounded px-2 py-1">Use Left/Right Arrows or Spacebar to change bar</span>
+                <span class="text-xs text-zinc-500 hidden sm:inline border border-zinc-700 rounded px-2 py-1">Left/Right Arrows or Spacebar</span>
+            </div>
+
+            <!-- Large Center Bar Display -->
+            <div class="absolute left-1/2 transform -translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md">
+                <span id="host-bar-display" class="text-2xl sm:text-3xl font-bold text-white tracking-wide font-mono drop-shadow-md">Bar: 1</span>
             </div>
             
-            <div class="flex items-center gap-4 mt-2 sm:mt-0">
+            <div class="flex items-center gap-4">
                 <div class="bg-black px-4 py-2 rounded-lg border border-red-900/50 shadow-inner">
-                    <span class="text-zinc-500 text-sm uppercase tracking-wider mr-2">Room Code:</span>
+                    <span class="text-zinc-500 text-sm uppercase tracking-wider mr-2 hidden sm:inline">ROOM CODE:</span>
                     <span id="host-room-code" class="text-2xl font-bold text-red-500 tracking-widest font-mono uppercase">----</span>
                 </div>
             </div>
@@ -124,7 +129,7 @@
 
     <!-- STUDENT VIEW -->
     <div id="view-student" class="hidden-view flex-1 flex flex-col h-full bg-zinc-950">
-        <header class="bg-zinc-900 border-b border-zinc-800 p-3 sm:p-4 flex flex-col lg:flex-row items-center justify-between shadow-md z-10 gap-4">
+        <header class="bg-zinc-900 border-b border-zinc-800 p-3 sm:p-4 flex flex-col lg:flex-row items-center justify-between shadow-md z-10 gap-4 relative">
             <div class="flex items-center gap-3 w-full lg:w-auto">
                 <button onclick="switchView('home')" class="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition">
                     <i class="fa-solid fa-arrow-left"></i>
@@ -134,6 +139,11 @@
                     <input type="text" id="join-code-input" placeholder="WORD" class="bg-transparent text-white placeholder-zinc-600 px-4 py-2 outline-none w-28 font-mono font-bold tracking-widest uppercase text-center" maxlength="4">
                     <button onclick="joinRehearsal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 font-bold transition">Join</button>
                 </div>
+            </div>
+
+            <!-- Large Center Bar Display -->
+            <div class="static lg:absolute lg:left-1/2 lg:transform lg:-translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md my-1 lg:my-0">
+                <span id="student-bar-display" class="text-2xl sm:text-3xl font-bold text-white tracking-wide font-mono drop-shadow-md">Bar: 1</span>
             </div>
 
             <div id="student-controls" class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto opacity-50 pointer-events-none transition-opacity">
@@ -176,8 +186,8 @@
 
     <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
-        <div>HaySync App</div>
-        <div>v1.5.0 • Updated: 21 Sep 2026, 09:12 AEST (Sydney)</div>
+        <div>HayScore App</div>
+        <div>v1.6.0 • Updated: 21 Sep 2026, 09:18 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -277,7 +287,6 @@
         };
 
         function generateRoomCode() {
-            // Pick a simple random 4-letter word from the safe dictionary
             const randomIndex = Math.floor(Math.random() * SAFE_WORD_CODES.length);
             roomCode = SAFE_WORD_CODES[randomIndex];
             
@@ -410,6 +419,10 @@
 
         // --- ACCURATE SINGLE MEASURE HIGHLIGHT ENGINE ---
         function highlightMeasure(osmdInstance, highlightBoxId, measureNumber, wrapperId) {
+            // Update Top Bar Displays on both views
+            document.getElementById('host-bar-display').innerText = `Bar: ${measureNumber}`;
+            document.getElementById('student-bar-display').innerText = `Bar: ${measureNumber}`;
+
             const highlightBox = document.getElementById(highlightBoxId);
             if (!osmdInstance || !osmdInstance.graphic) return;
 
@@ -422,7 +435,6 @@
             }
 
             try {
-                // Get all visible staff measures for the specific target measure index
                 const measureStaves = graphicSheet.measureList[measureIndex];
                 
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
