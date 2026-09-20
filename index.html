@@ -101,7 +101,7 @@
             <div class="flex items-center gap-4 mt-2 sm:mt-0">
                 <div class="bg-black px-4 py-2 rounded-lg border border-red-900/50 shadow-inner">
                     <span class="text-zinc-500 text-sm uppercase tracking-wider mr-2">Room Code:</span>
-                    <span id="host-room-code" class="text-2xl font-bold text-red-500 tracking-widest font-mono">----</span>
+                    <span id="host-room-code" class="text-2xl font-bold text-red-500 tracking-widest font-mono uppercase">----</span>
                 </div>
             </div>
         </header>
@@ -131,7 +131,7 @@
                 </button>
                 
                 <div class="flex bg-black border border-zinc-700 rounded-lg overflow-hidden flex-1 sm:flex-none">
-                    <input type="text" id="join-code-input" placeholder="CODE" class="bg-transparent text-white placeholder-zinc-600 px-4 py-2 outline-none w-28 font-mono font-bold tracking-widest uppercase text-center" maxlength="4">
+                    <input type="text" id="join-code-input" placeholder="WORD" class="bg-transparent text-white placeholder-zinc-600 px-4 py-2 outline-none w-28 font-mono font-bold tracking-widest uppercase text-center" maxlength="4">
                     <button onclick="joinRehearsal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 font-bold transition">Join</button>
                 </div>
             </div>
@@ -164,7 +164,7 @@
         <div class="flex-1 overflow-auto p-4 bg-zinc-950 flex items-center justify-center relative z-0" id="student-placeholder">
             <div class="text-center text-zinc-600">
                 <i class="fa-solid fa-music text-8xl mb-6 opacity-20"></i>
-                <p class="text-xl font-medium">Enter a room code to sync with the conductor.</p>
+                <p class="text-xl font-medium">Enter a room word code to sync with the conductor.</p>
             </div>
         </div>
         
@@ -177,7 +177,7 @@
     <!-- VERSION FOOTER BAR -->
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v1.4.0 • Updated: 21 Sep 2026, 09:05 AEST (Sydney)</div>
+        <div>v1.5.0 • Updated: 21 Sep 2026, 09:12 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -217,6 +217,16 @@
         // Measure Tracking
         let currentMeasureNumber = 1;
         let autoScrollEnabled = true;
+
+        // Clean, simple, school-safe 4-letter words list
+        const SAFE_WORD_CODES = [
+            "BAND", "NOTE", "BEAT", "SONG", "TUNE", "DRUM", "HORN", "BASS",
+            "CLEF", "PLAY", "REST", "JAZZ", "SING", "ROCK", "OBOE", "LUTE",
+            "REED", "KEYS", "TRIO", "SOLO", "DUET", "FAST", "SLOW", "LOUD",
+            "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE",
+            "GOLD", "MOON", "WAVE", "KITE", "BIRD", "LEAF", "GIFT", "TIME",
+            "PEAK", "CAMP", "FIRE", "PARK", "PATH", "BEAM", "GLOW", "RING"
+        ];
 
         window.showToast = function(message, type = 'info') {
             const container = document.getElementById('toast-container');
@@ -267,11 +277,10 @@
         };
 
         function generateRoomCode() {
-            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-            roomCode = '';
-            for (let i = 0; i < 4; i++) {
-                roomCode += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
+            // Pick a simple random 4-letter word from the safe dictionary
+            const randomIndex = Math.floor(Math.random() * SAFE_WORD_CODES.length);
+            roomCode = SAFE_WORD_CODES[randomIndex];
+            
             document.getElementById('host-room-code').innerText = roomCode;
             
             if (isFirebaseActive) {
@@ -282,9 +291,9 @@
         }
 
         window.joinRehearsal = function() {
-            const input = document.getElementById('join-code-input').value.toUpperCase();
+            const input = document.getElementById('join-code-input').value.toUpperCase().trim();
             if (input.length !== 4) {
-                showToast('Please enter a valid 4-character code.', 'error');
+                showToast('Please enter a valid 4-letter word code.', 'error');
                 return;
             }
             
@@ -420,7 +429,6 @@
                 let validCount = 0;
 
                 measureStaves.forEach(stave => {
-                    // Check if stave measure is valid and visible in current rendering
                     if (stave && stave.stave && stave.stave.rendered !== false && stave.PositionAndShape) {
                         const pos = stave.PositionAndShape;
                         const absPos = pos.AbsolutePosition;
