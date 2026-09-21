@@ -250,7 +250,7 @@
 
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v2.5.0 • Master Playback & Native Transpose</div>
+        <div>v2.5.1 • Master Playback & Native Metronome Audio</div>
     </footer>
 
     <script type="module">
@@ -307,6 +307,33 @@
         let bpm = 100;
         let playInterval = null;
         let metroInterval = null;
+
+        // Web Audio Context for Metronome Click
+        let audioCtx = null;
+
+        function playMetronomeClick() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1000, audioCtx.currentTime); // High pitch woodblock click sound
+
+            gain.gain.setValueAtTime(1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05); // Short snappy burst
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+        }
 
         let isDrawMode = false;
         let currentDrawBox = null;
@@ -454,6 +481,7 @@
                 dot.style.opacity = '1';
                 setTimeout(() => { dot.style.opacity = '0'; }, 100); 
             }
+            playMetronomeClick(); // Play synchronized click sound
         }
 
         function attachRoomListeners(code, role) {
