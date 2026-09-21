@@ -48,23 +48,6 @@
             z-index: 30;
             mix-blend-mode: screen;
         }
-        
-        .note-pitch-label {
-            position: absolute;
-            font-size: 10px;
-            font-weight: bold;
-            color: white;
-            background: #dc2626;
-            border-radius: 50%;
-            width: 14px;
-            height: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
-            z-index: 25;
-            transform: translate(-50%, -50%);
-        }
 
         /* --- Light / Paper Mode Overrides --- */
         body.light-mode #view-host, 
@@ -100,6 +83,7 @@
         body.light-mode select {
             background-color: #ffffff !important;
             color: #09090b !important;
+            border-color: #d4d4d8 !important;
         }
         body.light-mode select option {
             background-color: #ffffff !important;
@@ -108,6 +92,10 @@
         body.light-mode header button.bg-zinc-800 {
             background-color: #ffffff !important;
             border-color: #d4d4d8 !important;
+            color: #09090b !important;
+        }
+        body.light-mode header button.bg-zinc-800 i {
+            color: #52525b !important;
         }
         body.light-mode header button.bg-zinc-800:hover {
             background-color: #f4f4f5 !important;
@@ -248,7 +236,7 @@
         <div class="flex flex-1 relative overflow-hidden bg-zinc-950">
             <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 touch-pan-x touch-pan-y">
                 <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
-                <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative transform-origin-top-left transition-transform duration-75"></div>
+                <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
             </div>
 
             <!-- HOST ROSTER SIDEBAR -->
@@ -284,21 +272,6 @@
             </div>
         </div>
 
-        <!-- Custom Annotation Toolbar -->
-        <div id="annotation-toolbar" class="hidden-view absolute bottom-12 left-1/2 transform -translate-x-1/2 bg-zinc-900 border border-zinc-700 shadow-2xl rounded-2xl p-2 z-[60] flex gap-2 items-center">
-            <button class="anno-color-btn w-8 h-8 rounded-full bg-yellow-400 border-2 border-transparent hover:scale-110 transition ring-2 ring-yellow-400/50" data-color="rgba(250, 204, 21, 0.4)" data-border="rgba(250, 204, 21, 0.6)"></button>
-            <button class="anno-color-btn w-8 h-8 rounded-full bg-green-400 border-2 border-transparent hover:scale-110 transition" data-color="rgba(74, 222, 128, 0.4)" data-border="rgba(74, 222, 128, 0.6)"></button>
-            <button class="anno-color-btn w-8 h-8 rounded-full bg-blue-400 border-2 border-transparent hover:scale-110 transition" data-color="rgba(96, 165, 250, 0.4)" data-border="rgba(96, 165, 250, 0.6)"></button>
-            <button class="anno-color-btn w-8 h-8 rounded-full bg-pink-400 border-2 border-transparent hover:scale-110 transition" data-color="rgba(244, 114, 182, 0.4)" data-border="rgba(244, 114, 182, 0.6)"></button>
-            <div class="w-px h-6 bg-zinc-700 mx-1"></div>
-            <button id="anno-eraser-btn" class="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center transition" title="Eraser">
-                <i class="fa-solid fa-eraser"></i>
-            </button>
-            <button id="anno-clear-btn" class="w-10 h-10 rounded-xl bg-zinc-800 hover:bg-red-900/50 text-red-400 flex items-center justify-center transition" title="Clear All">
-                <i class="fa-solid fa-trash-can"></i>
-            </button>
-        </div>
-
         <header class="bg-zinc-900 border-b border-zinc-800 p-3 flex flex-col lg:flex-row items-center justify-between shadow-md z-10 gap-3 relative">
             <div class="flex items-center gap-3 w-full lg:w-auto">
                 <button onclick="switchView('home')" class="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition">
@@ -327,30 +300,37 @@
                     <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-zinc-400 pointer-events-none text-xs"></i>
                 </div>
 
-                <div class="relative flex-none w-[110px]">
+                <div class="relative flex-none w-[130px]">
                     <select id="key-selector" onchange="changeInstrumentKey(this.value)" class="appearance-none w-full bg-zinc-800 border-2 border-zinc-700 text-white px-3 py-2 pr-8 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer text-sm">
-                        <option value="0">C Inst</option>
-                        <option value="2">Bb Inst</option>
-                        <option value="9">Eb Inst</option>
-                        <option value="7">F Inst</option>
+                        <option value="0">Concert (C)</option>
+                        <option value="2">Bb Inst.</option>
+                        <option value="9">Eb Inst.</option>
+                        <option value="7">F Inst.</option>
                     </select>
                     <i class="fa-solid fa-chevron-down absolute right-3 top-3 text-zinc-400 pointer-events-none text-xs"></i>
                 </div>
                 
-                <div class="flex gap-1">
-                    <button id="btn-tuner" onclick="toggleTuner()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-9 h-9 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm flex items-center justify-center" title="Toggle Tuner">
+                <div class="flex bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden">
+                    <button onclick="transposeStudent(-1)" class="px-3 py-2 hover:bg-zinc-700 transition text-sm font-medium border-r border-zinc-700 text-zinc-300 hover:text-white" title="Down 1 Octave">
+                        <i class="fa-solid fa-minus text-red-500 mr-1"></i> 8vb
+                    </button>
+                    <button onclick="transposeStudent(1)" class="px-3 py-2 hover:bg-zinc-700 transition text-sm font-medium text-zinc-300 hover:text-white" title="Up 1 Octave">
+                        <i class="fa-solid fa-plus text-red-500 mr-1"></i> 8va
+                    </button>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="btn-tuner" onclick="toggleTuner()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Tuner">
                         <i class="fa-solid fa-microphone"></i>
                     </button>
-                    <button id="btn-pitch-labels" onclick="togglePitchLabels()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-9 h-9 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-bold flex items-center justify-center" title="Toggle Note Letters">
-                        Ab
+                    <button onclick="toggleTheme()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Theme">
+                        <i class="fa-solid fa-sun theme-toggle-icon"></i>
                     </button>
-                    <button id="btn-draw" onclick="toggleDrawMode()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-9 h-9 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm flex items-center justify-center" title="Draw Annotations">
-                        <i class="fa-solid fa-highlighter"></i>
-                    </button>
-                    <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 border border-red-600 text-white w-9 h-9 rounded-lg hover:bg-red-700 transition shadow-lg text-sm flex items-center justify-center" title="Toggle Auto-Scroll">
+                    <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Auto-Scroll">
                         <i class="fa-solid fa-angles-down"></i>
                     </button>
                 </div>
+                
                 <div class="hidden md:flex items-center gap-2 bg-black px-2 py-1 rounded-lg border border-zinc-700">
                     <i class="fa-solid fa-magnifying-glass text-zinc-500 text-[10px]"></i>
                     <input type="range" id="student-zoom-slider" min="0.3" max="2.5" step="0.1" value="1.0" class="w-16 h-1" onchange="changeZoom(this.value, 'student')">
@@ -359,9 +339,11 @@
         </header>
 
         <div class="flex-1 overflow-auto p-4 bg-zinc-950 flex items-center justify-center relative z-0" id="student-placeholder">
+            <!-- Hint Arrow -->
             <div class="absolute top-12 left-12 lg:left-32 flex flex-col items-center animate-bounce text-red-600 drop-shadow-md z-20">
                 <i class="fa-solid fa-arrow-up-long text-7xl"></i>
             </div>
+
             <div class="text-center text-zinc-600">
                 <i class="fa-solid fa-music text-8xl mb-6 opacity-20"></i>
                 <p class="text-xl font-medium">Enter a room <span class="underline decoration-red-600 decoration-4 underline-offset-4 text-zinc-300 font-bold">word code</span> to sync with the conductor.</p>
@@ -370,7 +352,7 @@
         
         <div id="osmd-student-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-6 bg-zinc-950 touch-pan-x touch-pan-y">
             <div id="student-highlight-box" class="measure-highlight-box hidden-view"></div>
-            <div id="osmd-student-container" class="w-full min-h-full relative select-none transform-origin-top-left transition-transform duration-75"></div>
+            <div id="osmd-student-container" class="w-full min-h-full relative select-none"></div>
         </div>
     </div>
 
@@ -382,6 +364,7 @@
             <p id="drive-folder-title" class="text-red-400 font-mono text-xs mb-4 border-b border-zinc-800 pb-3 flex items-center gap-2"><i class="fa-solid fa-folder-open"></i> Root Folder</p>
             
             <div id="drive-file-list" class="flex-1 overflow-auto bg-zinc-950 rounded-lg p-2 border border-zinc-800 space-y-2 osmd-scroll">
+                <!-- Files & Subfolders populate here via JS -->
             </div>
         </div>
     </div>
@@ -394,7 +377,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.7.0 • Updated: 21 Sep 2026, 18:42 AEST (Sydney)</div>
+        <div>v2.7.0 • Updated: 21 Sep 2026, 19:05 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -454,31 +437,22 @@
         let playInterval = null;
         let metroInterval = null;
 
-        // Student Info
-        let localStudentId = null;
-        let localStudentName = "Student";
+        // Zoom 
+        let hostZoom = 1.0;
+        let studentZoom = 1.0;
 
-        // Tuner & Pitch Labels
+        // Tuner
         let tunerActive = false;
         let audioContext = null;
         let analyser = null;
         let microphone = null;
         let tunerRafId = null;
-        let showPitchLabels = false;
 
-        // Annotations
-        let isDrawMode = false;
-        let isEraserMode = false;
-        let currentDrawBox = null;
-        let startX, startY;
-        let studentAnnotations = [];
-        let currentAnnoColor = "rgba(250, 204, 21, 0.4)";
-        let currentAnnoBorder = "rgba(250, 204, 21, 0.6)";
+        // Student Roster Name
+        let localStudentName = "Student";
+        let localStudentId = null;
 
-        // Zoom & Pinch
-        let hostZoom = 1.0;
-        let studentZoom = 1.0;
-
+        // Web Audio Context for Metronome Click
         let audioCtx = null;
 
         function playMetronomeClick() {
@@ -493,10 +467,10 @@
             const gain = audioCtx.createGain();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(1000, audioCtx.currentTime); 
 
             gain.gain.setValueAtTime(1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05); 
 
             osc.connect(gain);
             gain.connect(audioCtx.destination);
@@ -507,7 +481,9 @@
 
         const SAFE_WORD_CODES = [
             "BAND", "NOTE", "BEAT", "SONG", "TUNE", "DRUM", "HORN", "BASS",
-            "CLEF", "PLAY", "REST", "JAZZ", "SING", "ROCK", "OBOE", "LUTE"
+            "CLEF", "PLAY", "REST", "JAZZ", "SING", "ROCK", "OBOE", "LUTE",
+            "REED", "KEYS", "TRIO", "SOLO", "DUET", "FAST", "SLOW", "LOUD",
+            "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
         window.toggleTheme = function() {
@@ -522,8 +498,13 @@
             
             const themeBtns = document.querySelectorAll('.theme-toggle-icon');
             themeBtns.forEach(icon => {
-                if (isLightMode) { icon.classList.remove('fa-sun'); icon.classList.add('fa-moon'); } 
-                else { icon.classList.remove('fa-moon'); icon.classList.add('fa-sun'); }
+                if (isLightMode) {
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                } else {
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                }
             });
 
             if (osmdHost && currentXmlData) {
@@ -534,8 +515,6 @@
             if (osmdStudent && currentXmlData) {
                 osmdStudent.setOptions({ darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7" });
                 osmdStudent.render();
-                loadAnnotations();
-                injectPitchLabels(osmdStudent);
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
         };
@@ -545,7 +524,9 @@
             const listContainer = document.getElementById('drive-file-list');
 
             if (folderId && folderName) {
-                if (folderHistory[folderHistory.length - 1].id !== folderId) { folderHistory.push({ id: folderId, name: folderName }); }
+                if (folderHistory[folderHistory.length - 1].id !== folderId) {
+                    folderHistory.push({ id: folderId, name: folderName });
+                }
                 currentFolderId = folderId;
             } else if (!folderId) {
                 currentFolderId = HAY_SCORE_FOLDER_ID;
@@ -582,7 +563,9 @@
                 
                 listContainer.innerHTML = '';
 
-                if (folderHistory.length > 1) addBackButton(listContainer);
+                if (folderHistory.length > 1) {
+                    addBackButton(listContainer);
+                }
 
                 subfolders.forEach(folder => {
                     const btn = document.createElement('button');
@@ -620,33 +603,43 @@
         window.downloadDriveFile = async function(fileId, fileName) {
             closeDriveModal();
             showToast(`Downloading ${fileName}...`, 'info');
+            
             try {
                 const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${GOOGLE_API_KEY}`);
                 if (!response.ok) throw new Error("Download failed");
+                
                 if (fileName.toLowerCase().endsWith('.mid') || fileName.toLowerCase().endsWith('.midi')) {
                     const arrayBuffer = await response.arrayBuffer();
                     const midiData = new Uint8Array(arrayBuffer);
                     const midi = new Midi(midiData);
-                    renderLoadedScore(convertMidiToMusicXML(midi, fileName));
+                    const generatedXml = convertMidiToMusicXML(midi, fileName);
+                    renderLoadedScore(generatedXml);
                 } else {
                     const textData = await response.text();
                     renderLoadedScore(textData);
                 }
-            } catch (e) { showToast(`Error downloading file from Drive.`, 'error'); }
+            } catch (e) {
+                showToast(`Error downloading file from Drive.`, 'error');
+            }
         };
 
-        window.closeDriveModal = function() { document.getElementById('drive-modal').classList.add('hidden-view'); };
+        window.closeDriveModal = function() {
+            document.getElementById('drive-modal').classList.add('hidden-view');
+        };
 
         window.showToast = function(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             let styleClasses = 'bg-zinc-800 border border-zinc-700 text-zinc-100';
             let icon = 'fa-info-circle text-zinc-400';
+            
             if(type === 'error') { styleClasses = 'bg-red-950 border border-red-800 text-red-100'; icon = 'fa-circle-exclamation text-red-500'; }
             if(type === 'success') { styleClasses = 'bg-zinc-900 border border-red-600 text-zinc-100 shadow-[0_0_15px_rgba(220,38,38,0.3)]'; icon = 'fa-check-circle text-red-500'; }
+            
             toast.className = `${styleClasses} px-6 py-3 rounded-xl shadow-2xl font-medium text-sm flex items-center gap-3 transform -translate-y-10 opacity-0 transition-all duration-300 pointer-events-auto z-50`;
             toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i> ${message}`;
             container.appendChild(toast);
+            
             requestAnimationFrame(() => toast.classList.remove('-translate-y-10', 'opacity-0'));
             setTimeout(() => {
                 toast.classList.add('opacity-0', '-translate-y-4');
@@ -666,8 +659,10 @@
         function updateProgressUI() {
             if(totalMeasuresCache <= 0) return;
             const pct = Math.min(100, Math.round((currentMeasureNumber / totalMeasuresCache) * 100));
-            document.getElementById('measure-progress-text').innerText = `Bar ${currentMeasureNumber} of ${totalMeasuresCache} • ${pct}%`;
-            document.getElementById('measure-progress-bar').style.width = `${pct}%`;
+            const bar = document.getElementById('measure-progress-bar');
+            const text = document.getElementById('measure-progress-text');
+            if(bar) bar.style.width = `${pct}%`;
+            if(text) text.innerText = `Bar ${currentMeasureNumber} of ${totalMeasuresCache} • ${pct}%`;
         }
 
         function attachRoomListeners(code, role) {
@@ -678,6 +673,7 @@
                     const m = snap.val();
                     if(m) syncToMeasure(m);
                 });
+                
                 onValue(ref(db, `rooms/${code}/focusMode`), (snap) => {
                     const isFocus = snap.val();
                     const overlay = document.getElementById('focus-overlay');
@@ -688,13 +684,15 @@
                 onValue(ref(db, `rooms/${code}/roster`), (snap) => {
                     const rosterData = snap.val() || {};
                     const rosterList = document.getElementById('roster-list');
-                    rosterList.innerHTML = '';
-                    const keys = Object.keys(rosterData);
-                    document.getElementById('roster-count').innerText = keys.length;
-                    keys.forEach(k => {
-                        const r = rosterData[k];
-                        rosterList.innerHTML += `<div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm"><span class="font-bold text-zinc-200">${r.name}</span><span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span></div>`;
-                    });
+                    if(rosterList) {
+                        rosterList.innerHTML = '';
+                        const keys = Object.keys(rosterData);
+                        document.getElementById('roster-count').innerText = keys.length;
+                        keys.forEach(k => {
+                            const r = rosterData[k];
+                            rosterList.innerHTML += `<div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700"><span class="font-bold text-zinc-200">${r.name}</span><span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span></div>`;
+                        });
+                    }
                 });
             }
             
@@ -724,7 +722,7 @@
 
         window.toggleRoster = function() {
             const sidebar = document.getElementById('host-roster-sidebar');
-            sidebar.classList.toggle('hidden-view');
+            if(sidebar) sidebar.classList.toggle('hidden-view');
         };
 
         window.toggleMetronome = function() {
@@ -740,6 +738,7 @@
                 btn.classList.remove('bg-red-600', 'text-white');
                 btn.classList.add('bg-zinc-800', 'text-zinc-300');
             }
+            
             if (isFirebaseActive && roomCode) set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm });
         };
 
@@ -753,8 +752,12 @@
                 btn.classList.add('bg-red-600', 'text-white');
                 btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
                 showToast(`Auto-Playback Sweep started at ${bpm} BPM`, 'success');
+                
                 const measureDuration = (60000 / bpm) * 4;
-                playInterval = setInterval(() => { advanceHostMeasure(currentMeasureNumber + 1); }, measureDuration);
+                playInterval = setInterval(() => {
+                    advanceHostMeasure(currentMeasureNumber + 1);
+                }, measureDuration);
+                
             } else {
                 btn.classList.add('bg-green-600/20', 'text-green-500');
                 btn.classList.remove('bg-red-600', 'text-white');
@@ -768,24 +771,46 @@
             if(isFirebaseActive && roomCode && localStudentId) {
                 remove(ref(db, `rooms/${roomCode}/roster/${localStudentId}`));
             }
-            roomCode = ""; currentXmlData = null; currentMeasureNumber = 1; currentStudentTranspose = 0; currentStudentKeyTranspose = 0;
-            hostRehearsalMarks = {}; hostRepeatMarks = []; studentAnnotations = []; focusActive = false; metronomeActive = false; playbackActive = false;
-            clearInterval(metroInterval); clearInterval(playInterval); totalMeasuresCache = 0;
+
+            roomCode = "";
+            currentXmlData = null;
+            currentMeasureNumber = 1;
+            currentStudentTranspose = 0;
+            currentStudentKeyTranspose = 0;
+            hostRehearsalMarks = {};
+            hostRepeatMarks = [];
+            focusActive = false;
+            metronomeActive = false;
+            playbackActive = false;
+            totalMeasuresCache = 0;
+            clearInterval(metroInterval);
+            clearInterval(playInterval);
+            
             if(tunerActive) toggleTuner();
 
-            document.getElementById('btn-focus').className = "bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-500 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white";
-            document.getElementById('btn-metronome').className = "w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition text-zinc-300 mx-0.5";
-            document.getElementById('btn-play').className = "w-7 h-7 rounded bg-green-600/20 text-green-500 hover:bg-green-600/40 flex items-center justify-center transition";
+            // Reset Host Controls
+            document.getElementById('btn-focus').classList.remove('bg-red-600', 'text-white', 'border-red-500');
+            document.getElementById('btn-focus').classList.add('bg-zinc-800', 'text-zinc-300', 'border-zinc-700');
+            document.getElementById('btn-metronome').classList.remove('bg-red-600', 'text-white');
+            document.getElementById('btn-metronome').classList.add('bg-zinc-800', 'text-zinc-300');
+            document.getElementById('btn-play').classList.remove('bg-red-600', 'text-white');
+            document.getElementById('btn-play').classList.add('bg-green-600/20', 'text-green-500');
             document.getElementById('btn-play').innerHTML = '<i class="fa-solid fa-play"></i>';
 
             document.getElementById('drop-zone').classList.remove('hidden-view');
             document.getElementById('osmd-host-wrapper').classList.add('hidden-view');
-            document.getElementById('host-roster-sidebar').classList.add('hidden-view');
+            
+            const sidebar = document.getElementById('host-roster-sidebar');
+            if(sidebar) sidebar.classList.add('hidden-view');
+            
             document.getElementById('host-bar-display').innerText = "Bar: 1";
             document.getElementById('host-room-code').innerText = "----";
             document.getElementById('file-input').value = ""; 
 
-            if (osmdHost) { document.getElementById('osmd-host-container').innerHTML = ""; osmdHost = null; }
+            if (osmdHost) {
+                document.getElementById('osmd-host-container').innerHTML = ""; 
+                osmdHost = null; 
+            }
 
             document.getElementById('focus-overlay').classList.add('hidden-view');
             document.getElementById('student-placeholder').classList.remove('hidden-view');
@@ -794,46 +819,71 @@
             document.getElementById('join-code-input').value = "";
             document.getElementById('key-selector').value = "0";
             document.getElementById('student-controls').classList.add('opacity-50', 'pointer-events-none');
-            document.getElementById('measure-progress-bar').style.width = '0%';
-            document.getElementById('measure-progress-text').innerText = 'Bar 0 of 0 • 0%';
             
             const selector = document.getElementById('part-selector');
             selector.innerHTML = '<option value="" disabled selected>Select Part...</option>';
-            selector.className = "appearance-none w-full bg-zinc-800 border-2 border-zinc-700 text-white px-3 py-2 pr-8 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer text-sm";
+            selector.classList.remove('bg-red-600', 'border-red-400', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
+            selector.classList.add('bg-zinc-800', 'border-zinc-700');
+            
+            document.getElementById('measure-progress-bar').style.width = '0%';
+            document.getElementById('measure-progress-text').innerText = 'Bar 0 of 0 • 0%';
 
-            if (osmdStudent) { document.getElementById('osmd-student-container').innerHTML = ""; osmdStudent = null; }
+            if (osmdStudent) {
+                document.getElementById('osmd-student-container').innerHTML = ""; 
+                osmdStudent = null;
+            }
         }
 
         window.switchView = function(viewName) {
-            if (viewName === 'home') resetSession();
+            if (viewName === 'home') {
+                resetSession();
+            }
+
             document.getElementById('view-home').classList.add('hidden-view');
             document.getElementById('view-host').classList.add('hidden-view');
             document.getElementById('view-student').classList.add('hidden-view');
+            
             document.getElementById(`view-${viewName}`).classList.remove('hidden-view');
             currentView = viewName;
             
-            if (viewName === 'host' && !roomCode) { generateRoomCode(); initHostOSMD(); }
-            if (viewName === 'student') initStudentOSMD();
+            if (viewName === 'host' && !roomCode) {
+                generateRoomCode();
+                initHostOSMD();
+            }
+            if (viewName === 'student') {
+                initStudentOSMD();
+            }
         };
 
         function generateRoomCode() {
-            roomCode = SAFE_WORD_CODES[Math.floor(Math.random() * SAFE_WORD_CODES.length)];
+            const randomIndex = Math.floor(Math.random() * SAFE_WORD_CODES.length);
+            roomCode = SAFE_WORD_CODES[randomIndex];
             document.getElementById('host-room-code').innerText = roomCode;
+            
             if (isFirebaseActive) {
                 const roomRef = ref(db, `rooms/${roomCode}`);
-                set(roomRef, { measure: 1, focusMode: false, metronome: {active: false, bpm: 100}, timestamp: Date.now() });
+                set(roomRef, { 
+                    measure: 1, 
+                    focusMode: false, 
+                    metronome: {active: false, bpm: 100},
+                    timestamp: Date.now() 
+                });
                 attachRoomListeners(roomCode, 'host');
             }
         }
 
         window.joinRehearsal = function() {
             const input = document.getElementById('join-code-input').value.toUpperCase().trim();
-            if (input.length < 4 || input.length > 5) { showToast('Please enter valid word code.', 'error'); return; }
+            if (input.length < 4 || input.length > 5) {
+                showToast('Please enter a valid word code.', 'error');
+                return;
+            }
             
             localStudentName = prompt("Enter your name for the roster:") || "Student";
             localStudentId = "stu_" + Math.random().toString(36).substr(2, 9);
             
             showToast(`Connecting to ${input}...`, 'info');
+            
             if (isFirebaseActive) {
                 const roomRef = ref(db, `rooms/${input}`);
                 get(roomRef).then((snapshot) => {
@@ -842,23 +892,30 @@
                         if (roomData.xmlData) {
                             roomCode = input; 
                             currentXmlData = roomData.xmlData;
-                            currentStudentTranspose = 0; currentStudentKeyTranspose = 0;
+                            currentStudentTranspose = 0; 
+                            currentStudentKeyTranspose = 0;
                             document.getElementById('key-selector').value = "0";
+                            
                             document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
                             
                             const selector = document.getElementById('part-selector');
-                            selector.className = "appearance-none w-full bg-red-600 border-2 border-red-400 text-white px-3 py-2 pr-8 rounded-lg outline-none font-medium shadow-[0_0_15px_rgba(220,38,38,0.6)] animate-pulse transition cursor-pointer text-sm";
+                            selector.classList.remove('bg-zinc-800', 'border-zinc-700', 'text-white');
+                            selector.classList.add('bg-red-600', 'border-red-400', 'text-white', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
                             
                             showToast(`Score downloaded! Please select your part.`, 'success');
                             populateStudentParts(currentXmlData);
+                            
                             attachRoomListeners(input, 'student');
                             
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
                             set(myRosterRef, { name: localStudentName, partName: "" });
                             onDisconnect(myRosterRef).remove();
-
-                        } else { showToast('Room exists, but host has not loaded music yet.', 'error'); }
-                    } else { showToast('Room not found. Check code.', 'error'); }
+                        } else {
+                            showToast('Room exists, but host has not loaded music yet.', 'error');
+                        }
+                    } else {
+                        showToast('Room not found. Check code.', 'error');
+                    }
                 });
             }
         };
@@ -867,8 +924,12 @@
             if (!osmdHost && window.opensheetmusicdisplay) {
                 const container = document.getElementById('osmd-host-container');
                 osmdHost = new window.opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
-                    autoResize: true, backend: "svg", drawTitle: true, drawPartNames: true,
-                    darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
+                    autoResize: true,
+                    backend: "svg",
+                    drawTitle: true,
+                    drawPartNames: true,
+                    darkMode: !isLightMode, 
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
                 });
                 setupHostClickInteractions();
             }
@@ -878,8 +939,12 @@
             if (!osmdStudent && window.opensheetmusicdisplay) {
                 const container = document.getElementById('osmd-student-container');
                 osmdStudent = new window.opensheetmusicdisplay.OpenSheetMusicDisplay(container, {
-                    autoResize: true, backend: "svg", drawTitle: false, drawPartNames: false,
-                    darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
+                    autoResize: true,
+                    backend: "svg",
+                    drawTitle: false,
+                    drawPartNames: false,
+                    darkMode: !isLightMode,
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
                 });
             }
         }
@@ -914,12 +979,13 @@
             }
         }
 
-        function convertMidiToMusicXML(midi, songTitle) { /* Omitted for brevity, assumed functional in context */ return ""; }
+        function convertMidiToMusicXML(midi, songTitle) { /* Omitted for brevity */ }
 
         async function renderLoadedScore(xmlContent) {
             currentXmlData = xmlContent;
-            hostRehearsalMarks = {}; hostRepeatMarks = [];
             
+            hostRehearsalMarks = {};
+            hostRepeatMarks = [];
             try {
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(currentXmlData, "text/xml");
@@ -928,30 +994,48 @@
                     const measures = parts[0].getElementsByTagName("measure");
                     for(let m=0; m<measures.length; m++) {
                         const measureNum = parseInt(measures[m].getAttribute("number") || (m+1));
+                        
                         const rehearsals = measures[m].getElementsByTagName("rehearsal");
-                        if(rehearsals.length > 0) hostRehearsalMarks[rehearsals[0].textContent.trim().toUpperCase()] = measureNum;
+                        if(rehearsals.length > 0) {
+                            const mark = rehearsals[0].textContent.trim().toUpperCase();
+                            hostRehearsalMarks[mark] = measureNum;
+                        }
+                        
                         const repeats = measures[m].getElementsByTagName("repeat");
                         for(let r=0; r<repeats.length; r++) {
-                            if(repeats[r].getAttribute("direction") === "forward" && !hostRepeatMarks.includes(measureNum)) hostRepeatMarks.push(measureNum);
+                            if(repeats[r].getAttribute("direction") === "forward") {
+                                if(!hostRepeatMarks.includes(measureNum)) {
+                                    hostRepeatMarks.push(measureNum);
+                                }
+                            }
                         }
                     }
                     hostRepeatMarks.sort((a, b) => a - b);
                 }
-            } catch(e) {}
+            } catch(e) { console.warn("Could not parse XML markers", e); }
 
             try {
                 document.getElementById('drop-zone').classList.add('hidden-view');
                 document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
+                
                 await osmdHost.load(currentXmlData);
                 osmdHost.zoom = hostZoom;
                 osmdHost.render();
                 totalMeasuresCache = osmdHost.graphic.measureList.length;
                 
-                setTimeout(() => { highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); updateProgressUI(); }, 200);
+                setTimeout(() => { 
+                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
+                    updateProgressUI();
+                }, 200);
                 showToast('Score rendered successfully!', 'success');
-            } catch (err) { showToast('Failed to draw sheet music.', 'error'); return; }
+            } catch (err) {
+                showToast('Failed to draw sheet music.', 'error');
+                return; 
+            }
             
-            if (isFirebaseActive && roomCode) setTimeout(() => { set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData); }, 500); 
+            if (isFirebaseActive && roomCode) {
+                setTimeout(() => { set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData); }, 500); 
+            }
         }
 
         function highlightMeasure(osmdInstance, highlightBoxId, measureNumber, wrapperId) {
@@ -960,9 +1044,13 @@
             
             const highlightBox = document.getElementById(highlightBoxId);
             if (!osmdInstance || !osmdInstance.graphic) return;
+
             const measureIndex = measureNumber - 1; 
             const graphicSheet = osmdInstance.graphic;
-            if (!graphicSheet.measureList || !graphicSheet.measureList[measureIndex]) { highlightBox.classList.add('hidden-view'); return; }
+            if (!graphicSheet.measureList || !graphicSheet.measureList[measureIndex]) {
+                highlightBox.classList.add('hidden-view');
+                return;
+            }
 
             try {
                 const measureStaves = graphicSheet.measureList[measureIndex];
@@ -976,8 +1064,10 @@
                         if (pos && size) {
                             validCount++;
                             const x = pos.x * 10 * osmdInstance.zoom, y = pos.y * 10 * osmdInstance.zoom, w = size.width * 10 * osmdInstance.zoom, h = size.height * 10 * osmdInstance.zoom;
-                            if (x < minX) minX = x; if (y < minY) minY = y;
-                            if ((x + w) > maxX) maxX = x + w; if ((y + h) > maxY) maxY = y + h;
+                            if (x < minX) minX = x;
+                            if (y < minY) minY = y;
+                            if ((x + w) > maxX) maxX = x + w;
+                            if ((y + h) > maxY) maxY = y + h;
                         }
                     }
                 });
@@ -985,36 +1075,53 @@
                 if (validCount === 0) { highlightBox.classList.add('hidden-view'); return; }
 
                 const top = Math.max(0, minY - 10), left = Math.max(0, minX - 2), width = Math.max(maxX - minX + 4, 30), height = Math.max(maxY - minY + 20, 60);
-                highlightBox.style.top = `${top}px`; highlightBox.style.left = `${left}px`;
-                highlightBox.style.width = `${width}px`; highlightBox.style.height = `${height}px`;
+                highlightBox.style.top = `${top}px`;
+                highlightBox.style.left = `${left}px`;
+                highlightBox.style.width = `${width}px`;
+                highlightBox.style.height = `${height}px`;
                 highlightBox.classList.remove('hidden-view');
 
                 if (autoScrollEnabled && wrapperId) {
                     document.getElementById(wrapperId).scrollTo({ top: Math.max(0, top - 100), behavior: 'smooth' });
                 }
-            } catch (err) { }
+            } catch (err) { console.warn("Measure calculation fallback:", err); }
         }
 
-        function setupHostClickInteractions() { document.getElementById('osmd-host-container').addEventListener('click', () => advanceHostMeasure(currentMeasureNumber + 1)); }
+        function setupHostClickInteractions() {
+            document.getElementById('osmd-host-container').addEventListener('click', () => advanceHostMeasure(currentMeasureNumber + 1));
+        }
 
         document.addEventListener('keydown', (e) => {
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
             if (currentView === 'host') {
-                if (e.code === 'Space' || e.code === 'ArrowRight') { e.preventDefault(); advanceHostMeasure(currentMeasureNumber + 1); }
-                else if (e.code === 'ArrowLeft') { e.preventDefault(); advanceHostMeasure(currentMeasureNumber - 1); }
-                else if (e.code === 'KeyR' || e.key.toUpperCase() === 'R') {
+                if (e.code === 'Space' || e.code === 'ArrowRight') {
+                    e.preventDefault();
+                    advanceHostMeasure(currentMeasureNumber + 1);
+                } else if (e.code === 'ArrowLeft') {
+                    e.preventDefault();
+                    advanceHostMeasure(currentMeasureNumber - 1);
+                } else if (e.code === 'KeyR' || e.key.toUpperCase() === 'R') {
                     e.preventDefault();
                     let target = 1; 
                     for(let i = hostRepeatMarks.length - 1; i >= 0; i--) {
                         if(hostRepeatMarks[i] <= currentMeasureNumber) {
-                            target = (hostRepeatMarks[i] === currentMeasureNumber && i > 0) ? hostRepeatMarks[i-1] : hostRepeatMarks[i];
+                            if (hostRepeatMarks[i] === currentMeasureNumber && i > 0) {
+                                target = hostRepeatMarks[i-1];
+                            } else {
+                                target = hostRepeatMarks[i];
+                            }
                             break;
                         }
                     }
-                    advanceHostMeasure(target); showToast(`Jumped to Repeat (Bar ${target})`, 'info');
+                    advanceHostMeasure(target);
+                    showToast(`Jumped to Repeat (Bar ${target})`, 'info');
                 } else if (/^[A-Z]$/.test(e.key.toUpperCase())) {
                     const mark = e.key.toUpperCase();
-                    if (hostRehearsalMarks[mark]) { advanceHostMeasure(hostRehearsalMarks[mark]); showToast(`Jumped to Mark ${mark}`, 'info'); }
+                    if (hostRehearsalMarks[mark]) {
+                        advanceHostMeasure(hostRehearsalMarks[mark]);
+                        showToast(`Jumped to Mark ${mark}`, 'info');
+                    }
                 }
             }
         });
@@ -1029,13 +1136,16 @@
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             updateProgressUI();
             
-            if (isFirebaseActive && roomCode) set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
+            if (isFirebaseActive && roomCode) {
+                set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
+            }
         }
 
         window.populateStudentParts = function(xmlString) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlString, "text/xml");
             const partList = xmlDoc.getElementsByTagName("score-part");
+            
             const selector = document.getElementById('part-selector');
             selector.innerHTML = '<option value="" disabled selected>Select Part...</option>';
             
@@ -1044,7 +1154,8 @@
                 const nameNode = partList[i].getElementsByTagName("part-name")[0];
                 if(nameNode) name = nameNode.textContent;
                 const opt = document.createElement('option');
-                opt.value = i; opt.text = name;
+                opt.value = i; 
+                opt.text = name;
                 selector.appendChild(opt);
             }
         };
@@ -1052,12 +1163,16 @@
         window.selectPart = async function(partIndexStr) {
             if(!currentXmlData) return;
             const index = parseInt(partIndexStr);
-            const selector = document.getElementById('part-selector');
-            selector.className = "appearance-none w-full bg-zinc-800 border-2 border-zinc-700 text-white px-3 py-2 pr-8 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer text-sm";
             
-            const partName = selector.options[selector.selectedIndex].text;
-            if(isFirebaseActive && roomCode && localStudentId) set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/partName`), partName);
+            const selector = document.getElementById('part-selector');
+            selector.classList.remove('bg-red-600', 'border-red-400', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
+            selector.classList.add('bg-zinc-800', 'border-zinc-700');
 
+            const partName = selector.options[selector.selectedIndex].text;
+            if(isFirebaseActive && roomCode && localStudentId) {
+                set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/partName`), partName);
+            }
+            
             showToast('Loading your part...', 'info');
             document.getElementById('student-placeholder').classList.add('hidden-view');
             document.getElementById('osmd-student-wrapper').classList.remove('hidden-view');
@@ -1073,9 +1188,25 @@
             await renderStudentTransposedXml(parseInt(selector.value));
         };
 
+        window.transposeStudent = async function(octaveShift) {
+            const selector = document.getElementById('part-selector');
+            if(!currentXmlData || selector.value === "") {
+                showToast("Please select a part first.", "error");
+                return;
+            }
+            currentStudentTranspose += octaveShift;
+            showToast(`Transposing ${currentStudentTranspose > 0 ? '+' : ''}${currentStudentTranspose} octave(s)...`, 'info');
+            await renderStudentTransposedXml(parseInt(selector.value));
+        };
+
         async function renderStudentTransposedXml(partIndex) {
             const totalTranspose = (currentStudentTranspose * 12) + currentStudentKeyTranspose;
-            osmdStudent.setOptions({ darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7" });
+            
+            osmdStudent.setOptions({ 
+                darkMode: !isLightMode,
+                defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
+            });
+
             await osmdStudent.load(currentXmlData);
 
             if (!osmdStudent.TransposeCalculator && window.opensheetmusicdisplay && window.opensheetmusicdisplay.TransposeCalculator) {
@@ -1085,17 +1216,27 @@
             const sheet = osmdStudent.Sheet || osmdStudent.sheet;
             if (sheet) {
                 sheet.Transpose = totalTranspose;
-                for(let i = 0; i < sheet.Instruments.length; i++) sheet.Instruments[i].Visible = (i === partIndex);
+                
+                for(let i = 0; i < sheet.Instruments.length; i++) {
+                    sheet.Instruments[i].Visible = (i === partIndex);
+                }
             }
             
-            try { osmdStudent.updateGraphic(); } catch(e) { }
+            try { 
+                osmdStudent.updateGraphic(); 
+            } catch(e) { 
+                console.warn("Graphic update issue", e); 
+            }
+            
             osmdStudent.zoom = studentZoom;
             osmdStudent.render();
             
             totalMeasuresCache = osmdStudent.graphic.measureList.length;
-            loadAnnotations();
-            injectPitchLabels(osmdStudent);
-            setTimeout(() => { syncToMeasure(currentMeasureNumber); updateProgressUI(); }, 200);
+            
+            setTimeout(() => { 
+                syncToMeasure(currentMeasureNumber);
+                updateProgressUI();
+            }, 200);
             showToast('Ready to play.', 'success');
         }
 
@@ -1110,10 +1251,12 @@
             autoScrollEnabled = !autoScrollEnabled;
             const btn = document.getElementById('btn-autoscroll');
             if(autoScrollEnabled) {
-                btn.className = "bg-red-600 border border-red-600 text-white w-9 h-9 rounded-lg hover:bg-red-700 transition shadow-lg text-sm flex items-center justify-center";
+                btn.classList.add('bg-red-600', 'border-red-600', 'text-white');
+                btn.classList.remove('bg-zinc-800', 'border-zinc-700', 'text-zinc-300');
                 showToast('Auto-scroll enabled');
             } else {
-                btn.className = "bg-zinc-800 text-zinc-300 border border-zinc-700 w-9 h-9 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm flex items-center justify-center";
+                btn.classList.remove('bg-red-600', 'border-red-600', 'text-white');
+                btn.classList.add('bg-zinc-800', 'border-zinc-700', 'text-zinc-300');
                 showToast('Auto-scroll disabled');
             }
         };
@@ -1121,18 +1264,22 @@
         // --- ZOOM & PINCH GESTURES ---
         window.changeZoom = function(val, role) {
             if(role === 'host' && osmdHost) {
-                hostZoom = parseFloat(val); osmdHost.zoom = hostZoom; osmdHost.render();
+                hostZoom = parseFloat(val); 
+                osmdHost.zoom = hostZoom; 
+                osmdHost.render();
                 highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             }
             if(role === 'student' && osmdStudent) {
-                studentZoom = parseFloat(val); osmdStudent.zoom = studentZoom; osmdStudent.render();
-                loadAnnotations(); injectPitchLabels(osmdStudent);
+                studentZoom = parseFloat(val); 
+                osmdStudent.zoom = studentZoom; 
+                osmdStudent.render();
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
         }
 
         function setupPinchZoom(wrapperId, role) {
             const wrapper = document.getElementById(wrapperId);
+            if(!wrapper) return;
             let initialDist = null;
             let initialZoom = 1.0;
             wrapper.addEventListener('touchstart', (e) => {
@@ -1146,190 +1293,26 @@
                     let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
                     let scale = currentDist / initialDist;
                     let newZoom = Math.max(0.3, Math.min(2.5, initialZoom * scale));
-                    if(role === 'host') document.getElementById('host-zoom-slider').value = newZoom;
-                    if(role === 'student') document.getElementById('student-zoom-slider').value = newZoom;
+                    
+                    if(role === 'host') {
+                        const slider = document.getElementById('host-zoom-slider');
+                        if (slider) slider.value = newZoom;
+                    }
+                    if(role === 'student') {
+                        const slider = document.getElementById('student-zoom-slider');
+                        if (slider) slider.value = newZoom;
+                    }
+                    
                     changeZoom(newZoom, role);
                 }
             }, {passive: true});
             wrapper.addEventListener('touchend', (e) => { if(e.touches.length < 2) initialDist = null; });
         }
-        setupPinchZoom('osmd-host-wrapper', 'host');
-        setupPinchZoom('osmd-student-wrapper', 'student');
-
-        // --- ANNOTATIONS ---
-        window.toggleDrawMode = function() {
-            isDrawMode = !isDrawMode;
-            const btn = document.getElementById('btn-draw');
-            const wrapper = document.getElementById('osmd-student-wrapper');
-            const toolbar = document.getElementById('annotation-toolbar');
-            
-            if(isDrawMode) {
-                btn.className = "bg-yellow-500 text-black border border-yellow-400 w-9 h-9 rounded-lg hover:bg-yellow-400 transition shadow-lg text-sm flex items-center justify-center";
-                wrapper.style.cursor = 'crosshair';
-                toolbar.classList.remove('hidden-view');
-                showToast('Draw Mode Enabled', 'info');
-            } else {
-                btn.className = "bg-zinc-800 text-zinc-300 border border-zinc-700 w-9 h-9 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm flex items-center justify-center";
-                wrapper.style.cursor = 'default';
-                toolbar.classList.add('hidden-view');
-                isEraserMode = false;
-                document.getElementById('anno-eraser-btn').classList.remove('bg-red-600', 'text-white');
-            }
-        };
-
-        document.querySelectorAll('.anno-color-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                currentAnnoColor = e.target.dataset.color;
-                currentAnnoBorder = e.target.dataset.border;
-                isEraserMode = false;
-                document.getElementById('anno-eraser-btn').classList.remove('bg-red-600', 'text-white', 'bg-zinc-700');
-                document.querySelectorAll('.anno-color-btn').forEach(b => b.classList.remove('ring-2'));
-                e.target.classList.add('ring-2');
-            });
-        });
-
-        document.getElementById('anno-eraser-btn').addEventListener('click', (e) => {
-            isEraserMode = true;
-            e.currentTarget.classList.add('bg-red-600', 'text-white');
-            document.querySelectorAll('.anno-color-btn').forEach(b => b.classList.remove('ring-2'));
-        });
-        document.getElementById('anno-clear-btn').addEventListener('click', () => {
-            studentAnnotations = []; saveAnnotations(); loadAnnotations();
-        });
-
-        const studentWrapper = document.getElementById('osmd-student-wrapper');
-        studentWrapper.addEventListener('mousedown', (e) => {
-            if(!isDrawMode || isEraserMode || e.button !== 0) return;
-            const rect = studentWrapper.getBoundingClientRect();
-            startX = e.clientX - rect.left + studentWrapper.scrollLeft;
-            startY = e.clientY - rect.top + studentWrapper.scrollTop;
-            
-            currentDrawBox = document.createElement('div');
-            currentDrawBox.className = 'absolute mix-blend-screen rounded z-40';
-            currentDrawBox.style.backgroundColor = currentAnnoColor;
-            currentDrawBox.style.border = `2px solid ${currentAnnoBorder}`;
-            currentDrawBox.style.left = startX + 'px'; currentDrawBox.style.top = startY + 'px';
-            currentDrawBox.style.width = '0px'; currentDrawBox.style.height = '0px';
-            
-            let layer = document.getElementById('annotation-layer');
-            if(!layer) {
-                layer = document.createElement('div'); layer.id = 'annotation-layer';
-                layer.className = 'absolute inset-0 pointer-events-auto z-40';
-                document.getElementById('osmd-student-container').appendChild(layer);
-            }
-            layer.appendChild(currentDrawBox);
-        });
         
-        studentWrapper.addEventListener('mousemove', (e) => {
-            if(!isDrawMode || isEraserMode || !currentDrawBox) return;
-            const rect = studentWrapper.getBoundingClientRect();
-            const currentX = e.clientX - rect.left + studentWrapper.scrollLeft;
-            const currentY = e.clientY - rect.top + studentWrapper.scrollTop;
-            currentDrawBox.style.left = Math.min(currentX, startX) + 'px';
-            currentDrawBox.style.top = Math.min(currentY, startY) + 'px';
-            currentDrawBox.style.width = Math.abs(currentX - startX) + 'px';
-            currentDrawBox.style.height = Math.abs(currentY - startY) + 'px';
+        document.addEventListener('DOMContentLoaded', () => {
+            setupPinchZoom('osmd-host-wrapper', 'host');
+            setupPinchZoom('osmd-student-wrapper', 'student');
         });
-        
-        studentWrapper.addEventListener('mouseup', () => {
-            if(!isDrawMode || isEraserMode || !currentDrawBox) return;
-            studentAnnotations.push({
-                id: Date.now().toString(),
-                left: currentDrawBox.style.left, top: currentDrawBox.style.top,
-                width: currentDrawBox.style.width, height: currentDrawBox.style.height,
-                color: currentAnnoColor, border: currentAnnoBorder
-            });
-            saveAnnotations(); loadAnnotations();
-            currentDrawBox = null;
-        });
-
-        function saveAnnotations() {
-            const songFootprint = currentXmlData ? currentXmlData.length : 'unknown';
-            const partIdx = document.getElementById('part-selector').value;
-            const key = `hayscore_ann_${songFootprint}_${partIdx}`;
-            localStorage.setItem(key, JSON.stringify(studentAnnotations));
-        }
-
-        window.loadAnnotations = function() {
-            const songFootprint = currentXmlData ? currentXmlData.length : 'unknown';
-            const partIdx = document.getElementById('part-selector').value;
-            const key = `hayscore_ann_${songFootprint}_${partIdx}`;
-            const saved = localStorage.getItem(key);
-            
-            let layer = document.getElementById('annotation-layer');
-            if(layer) layer.innerHTML = '';
-            else {
-                layer = document.createElement('div'); layer.id = 'annotation-layer';
-                layer.className = 'absolute inset-0 z-40';
-                document.getElementById('osmd-student-container').appendChild(layer);
-            }
-            
-            studentAnnotations = saved ? JSON.parse(saved) : [];
-            studentAnnotations.forEach(ann => {
-                const box = document.createElement('div');
-                box.className = 'absolute mix-blend-screen rounded z-40 cursor-pointer hover:opacity-50 transition-opacity';
-                box.style.backgroundColor = ann.color; box.style.border = `2px solid ${ann.border}`;
-                box.style.left = ann.left; box.style.top = ann.top;
-                box.style.width = ann.width; box.style.height = ann.height;
-                box.dataset.id = ann.id;
-                box.onclick = (e) => {
-                    if(isDrawMode && isEraserMode) {
-                        e.stopPropagation();
-                        studentAnnotations = studentAnnotations.filter(a => a.id !== ann.id);
-                        saveAnnotations(); loadAnnotations();
-                    }
-                };
-                layer.appendChild(box);
-            });
-        }
-
-        // --- NOTE HEAD LABELS ---
-        window.togglePitchLabels = function() {
-            showPitchLabels = !showPitchLabels;
-            const btn = document.getElementById('btn-pitch-labels');
-            if(showPitchLabels) btn.className = "bg-red-600 border border-red-600 text-white w-9 h-9 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-bold flex items-center justify-center";
-            else btn.className = "bg-zinc-800 text-zinc-300 border border-zinc-700 w-9 h-9 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-bold flex items-center justify-center";
-            injectPitchLabels(osmdStudent);
-        }
-
-        function injectPitchLabels(osmdInstance) {
-            let layer = document.getElementById('pitch-label-layer');
-            if(layer) layer.innerHTML = '';
-            else {
-                layer = document.createElement('div'); layer.id = 'pitch-label-layer';
-                layer.className = 'absolute inset-0 pointer-events-none z-30';
-                document.getElementById('osmd-student-container').appendChild(layer);
-            }
-            if(!showPitchLabels || !osmdInstance || !osmdInstance.graphic) return;
-            
-            try {
-                osmdInstance.graphic.measureList.forEach(m => {
-                    m.forEach(stave => {
-                        if(stave && stave.staffEntries) {
-                            stave.staffEntries.forEach(entry => {
-                                entry.graphicalVoiceEntries.forEach(gve => {
-                                    gve.notes.forEach(note => {
-                                        if(note.sourceNote && note.sourceNote.Pitch && note.PositionAndShape) {
-                                            const pitchStr = note.sourceNote.Pitch.ToString();
-                                            const letter = pitchStr.substring(0, pitchStr.search(/\d/)).replace(/(is|es)/, ''); // Simplify 
-                                            const pos = note.PositionAndShape.AbsolutePosition;
-                                            if(pos) {
-                                                const label = document.createElement('div');
-                                                label.className = 'note-pitch-label';
-                                                label.style.left = `${(pos.x * 10 * osmdInstance.zoom) + 5}px`;
-                                                label.style.top = `${(pos.y * 10 * osmdInstance.zoom)}px`;
-                                                label.innerText = letter;
-                                                layer.appendChild(label);
-                                            }
-                                        }
-                                    });
-                                });
-                            });
-                        }
-                    });
-                });
-            } catch(e) { console.warn("Could not inject pitch labels", e); }
-        }
 
         // --- BUILT-IN TUNER ---
         window.toggleTuner = async function() {
@@ -1337,7 +1320,7 @@
             const btn = document.getElementById('btn-tuner');
             const overlay = document.getElementById('tuner-overlay');
             if(tunerActive) {
-                btn.className = "bg-red-600 border border-red-600 text-white w-9 h-9 rounded-lg hover:bg-red-700 transition shadow-lg text-sm flex items-center justify-center";
+                btn.className = "bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium flex items-center justify-center";
                 overlay.classList.remove('hidden-view');
                 try {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1349,7 +1332,7 @@
                     updatePitch();
                 } catch(e) { showToast('Mic access denied.', 'error'); toggleTuner(); }
             } else {
-                btn.className = "bg-zinc-800 text-zinc-300 border border-zinc-700 w-9 h-9 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm flex items-center justify-center";
+                btn.className = "bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center";
                 overlay.classList.add('hidden-view');
                 cancelAnimationFrame(tunerRafId);
                 if(audioContext) { audioContext.close(); audioContext = null; }
