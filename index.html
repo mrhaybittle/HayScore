@@ -199,18 +199,18 @@
     <div id="drive-modal" class="hidden-view fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div class="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-3xl h-[80vh] flex flex-col p-6 relative shadow-2xl">
             <button onclick="closeDriveModal()" class="absolute top-5 right-5 text-zinc-400 hover:text-white transition bg-zinc-800 hover:bg-red-600 rounded-full w-8 h-8 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
-            <h2 class="text-2xl font-bold mb-4 text-white flex items-center gap-3"><i class="fa-brands fa-google-drive text-green-500 text-3xl"></i> HayScore Cloud Library</h2>
-            <p class="text-zinc-400 text-sm mb-4 border-b border-zinc-800 pb-4">Select a sheet music file to load into the rehearsal session.</p>
+            <h2 class="text-2xl font-bold mb-1 text-white flex items-center gap-3"><i class="fa-brands fa-google-drive text-green-500 text-3xl"></i> HayScore Cloud Library</h2>
+            <p id="drive-folder-title" class="text-red-400 font-mono text-xs mb-4 border-b border-zinc-800 pb-3 flex items-center gap-2"><i class="fa-solid fa-folder-open"></i> Root Folder</p>
             
             <div id="drive-file-list" class="flex-1 overflow-auto bg-zinc-950 rounded-lg p-2 border border-zinc-800 space-y-2 osmd-scroll">
-                <!-- Files populate here via JS -->
+                <!-- Files & Subfolders populate here via JS -->
             </div>
         </div>
     </div>
 
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v2.0.0 • Cloud Library Enabled</div>
+        <div>v2.1.0 • Folder Navigation Enabled</div>
     </footer>
 
     <script type="module">
@@ -242,6 +242,9 @@
         const HAY_SCORE_FOLDER_ID = "12QYBAl7PE_nIK-02hQNgA-tKUCQbCnUi";
         const GOOGLE_API_KEY = firebaseConfig.apiKey; 
 
+        let currentFolderId = HAY_SCORE_FOLDER_ID;
+        let folderHistory = [{ id: HAY_SCORE_FOLDER_ID, name: "Root Folder" }];
+
         let currentView = 'home';
         let osmdHost = null;
         let osmdStudent = null;
@@ -265,13 +268,27 @@
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
-        window.fetchDriveFiles = async function() {
+        window.fetchDriveFiles = async function(folderId = null, folderName = null) {
             document.getElementById('drive-modal').classList.remove('hidden-view');
             const listContainer = document.getElementById('drive-file-list');
-            listContainer.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-zinc-500"><i class="fa-solid fa-spinner fa-spin text-4xl mb-4 text-red-600"></i><p>Scanning Drive Folder...</p></div>';
+
+            if (folderId && folderName) {
+                if (folderHistory[folderHistory.length - 1].id !== folderId) {
+                    folderHistory.push({ id: folderId, name: folderName });
+                }
+                currentFolderId = folderId;
+            } else if (!folderId) {
+                currentFolderId = HAY_SCORE_FOLDER_ID;
+                folderHistory = [{ id: HAY_SCORE_FOLDER_ID, name: "Root Folder" }];
+            }
+
+            const activeFolder = folderHistory[folderHistory.length - 1];
+            document.getElementById('drive-folder-title').innerHTML = `<i class="fa-solid fa-folder-open"></i> ${activeFolder.name}`;
+
+            listContainer.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-zinc-500"><i class="fa-solid fa-spinner fa-spin text-4xl mb-4 text-red-600"></i><p>Scanning Folder...</p></div>';
             
             try {
-                const url = `https://www.googleapis.com/drive/v3/files?q='${HAY_SCORE_FOLDER_ID}'+in+parents+and+trashed=false&fields=files(id,name,mimeType)&key=${GOOGLE_API_KEY}`;
+                const url = `https://www.googleapis.com/drive/v3/files?q='${currentFolderId}'+in+parents+and+trashed=false&fields=files(id,name,mimeType)&key=${GOOGLE_API_KEY}`;
                 const response = await fetch(url);
                 const data = await response.json();
                 
@@ -280,15 +297,36 @@
                     return;
                 }
                 
-                const files = data.files.filter(f => f.name.toLowerCase().endsWith('.musicxml') || f.name.toLowerCase().endsWith('.xml') || f.name.toLowerCase().endsWith('.mxl') || f.name.toLowerCase().endsWith('.mid') || f.name.toLowerCase().endsWith('.midi'));
+                const items = data.files || [];
+                const subfolders = items.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+                const musicFiles = items.filter(f => {
+                    const name = f.name.toLowerCase();
+                    return name.endsWith('.musicxml') || name.endsWith('.xml') || name.endsWith('.mxl') || name.endsWith('.mid') || name.endsWith('.midi');
+                });
                 
-                if (files.length === 0) {
-                    listContainer.innerHTML = '<div class="p-8 text-center text-zinc-500">No supported sheet music files found.</div>';
+                if (subfolders.length === 0 && musicFiles.length === 0) {
+                    listContainer.innerHTML = '<div class="p-8 text-center text-zinc-500">This folder is empty.</div>';
+                    if (folderHistory.length > 1) addBackButton(listContainer);
                     return;
                 }
                 
                 listContainer.innerHTML = '';
-                files.forEach(file => {
+
+                if (folderHistory.length > 1) {
+                    addBackButton(listContainer);
+                }
+
+                // Render Subfolders First
+                subfolders.forEach(folder => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full text-left bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-yellow-500 p-4 rounded-xl transition flex items-center gap-4 group";
+                    btn.innerHTML = `<i class="fa-solid fa-folder text-yellow-500 text-2xl group-hover:scale-110 transition-transform"></i> <span class="text-lg font-bold truncate text-zinc-200 group-hover:text-white">${folder.name}</span> <i class="fa-solid fa-chevron-right ml-auto text-zinc-600 group-hover:text-yellow-500 transition"></i>`;
+                    btn.onclick = () => fetchDriveFiles(folder.id, folder.name);
+                    listContainer.appendChild(btn);
+                });
+
+                // Render Sheet Music Files Second
+                musicFiles.forEach(file => {
                     const btn = document.createElement('button');
                     btn.className = "w-full text-left bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-red-500 p-4 rounded-xl transition flex items-center gap-4 group";
                     let icon = (file.name.toLowerCase().endsWith('.mid') || file.name.toLowerCase().endsWith('.midi')) ? 'fa-file-audio text-yellow-500 group-hover:text-red-500' : 'fa-file-code text-blue-400 group-hover:text-red-500';
@@ -300,6 +338,18 @@
                 listContainer.innerHTML = `<div class="p-6 text-red-500 bg-red-950/30 rounded-lg border border-red-900 mt-4"><i class="fa-solid fa-wifi mr-2"></i> Network error fetching files.</div>`;
             }
         };
+
+        function addBackButton(container) {
+            const btn = document.createElement('button');
+            btn.className = "w-full text-left bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 p-3 rounded-xl transition flex items-center gap-3 text-red-400 hover:text-red-300 font-semibold mb-2";
+            btn.innerHTML = `<i class="fa-solid fa-arrow-left"></i> <span>Back to Previous Folder</span>`;
+            btn.onclick = () => {
+                folderHistory.pop();
+                const parent = folderHistory[folderHistory.length - 1];
+                fetchDriveFiles(parent.id, parent.name);
+            };
+            container.appendChild(btn);
+        }
 
         window.downloadDriveFile = async function(fileId, fileName) {
             closeDriveModal();
@@ -535,14 +585,12 @@
                     for(let m=0; m<measures.length; m++) {
                         const measureNum = parseInt(measures[m].getAttribute("number") || (m+1));
                         
-                        // Parse Rehearsal Letters
                         const rehearsals = measures[m].getElementsByTagName("rehearsal");
                         if(rehearsals.length > 0) {
                             const mark = rehearsals[0].textContent.trim().toUpperCase();
                             hostRehearsalMarks[mark] = measureNum;
                         }
                         
-                        // Parse Repeat Starts
                         const repeats = measures[m].getElementsByTagName("repeat");
                         for(let r=0; r<repeats.length; r++) {
                             if(repeats[r].getAttribute("direction") === "forward") {
@@ -628,7 +676,6 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            // Prevent shortcuts from triggering if typing in an input
             if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
 
             if (currentView === 'host') {
