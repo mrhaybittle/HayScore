@@ -328,7 +328,7 @@
 
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v2.6.0 • Metronome Audio & Light Mode</div>
+        <div>v2.6.5 • Metronome Audio & Correct Transposition</div>
     </footer>
 
     <script type="module">
@@ -1086,9 +1086,8 @@
             // Calculate total semitone shift (Octaves + Instrument Key)
             const totalTranspose = (currentStudentTranspose * 12) + currentStudentKeyTranspose;
             
-            // 1. Apply transposition via the official OSMD options API BEFORE loading
+            // 1. Re-apply visual options
             osmdStudent.setOptions({ 
-                transpose: totalTranspose,
                 darkMode: !isLightMode,
                 defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
             });
@@ -1096,12 +1095,30 @@
             // 2. Load the raw XML
             await osmdStudent.load(currentXmlData);
 
-            // 3. Isolate the correct instrument part
-            for(let i=0; i < osmdStudent.sheet.Instruments.length; i++) {
-                osmdStudent.sheet.Instruments[i].Visible = (i === partIndex);
+            // 3. Initialize Transpose Calculator if needed
+            if (!osmdStudent.TransposeCalculator && window.opensheetmusicdisplay && window.opensheetmusicdisplay.TransposeCalculator) {
+                osmdStudent.TransposeCalculator = new window.opensheetmusicdisplay.TransposeCalculator();
+            }
+
+            // 4. Apply transposition
+            const sheet = osmdStudent.Sheet || osmdStudent.sheet;
+            if (sheet) {
+                sheet.Transpose = totalTranspose;
+                
+                // 5. Isolate the correct instrument part
+                for(let i = 0; i < sheet.Instruments.length; i++) {
+                    sheet.Instruments[i].Visible = (i === partIndex);
+                }
             }
             
-            // 4. Draw it to the screen
+            // 6. Force the graphic update to recalculate the key signatures/notes
+            try { 
+                osmdStudent.updateGraphic(); 
+            } catch(e) { 
+                console.warn("Graphic update issue", e); 
+            }
+            
+            // 7. Draw it to the screen
             osmdStudent.render();
             
             loadAnnotations();
