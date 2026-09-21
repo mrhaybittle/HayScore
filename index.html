@@ -942,17 +942,30 @@
         };
 
         async function renderStudentTransposedXml(partIndex) {
+            // 1. Load the raw XML first so the 'sheet' object is created
             await osmdStudent.load(currentXmlData);
             
-            // Apply Native OSMD Transposition Engine (Handles Key Signatures automatically)
+            // 2. Calculate total semitone shift (Octaves + Instrument Key)
             const totalTranspose = (currentStudentTranspose * 12) + currentStudentKeyTranspose;
-            osmdStudent.Sheet.Transpose = totalTranspose;
+            
+            // 3. Apply transposition (using lowercase .sheet to fix the crash)
+            if (osmdStudent.sheet) {
+                osmdStudent.sheet.Transpose = totalTranspose;
+            }
 
+            // 4. Isolate the correct instrument part
             for(let i=0; i < osmdStudent.sheet.Instruments.length; i++) {
                 osmdStudent.sheet.Instruments[i].Visible = (i === partIndex);
             }
             
-            try { osmdStudent.updateGraphic(); } catch(e) { console.warn("Graphic update issue", e); }
+            // 5. Force the graphic update to calculate the new key signatures/notes
+            try { 
+                osmdStudent.updateGraphic(); 
+            } catch(e) { 
+                console.warn("Graphic update issue", e); 
+            }
+            
+            // 6. Draw it to the screen
             osmdStudent.render();
             
             loadAnnotations();
