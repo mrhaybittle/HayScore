@@ -92,7 +92,7 @@
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100">Conductor</h2>
-                <span class="text-xs text-zinc-500 hidden sm:inline border border-zinc-700 rounded px-2 py-1">Letters to Jump Marks</span>
+                <span class="text-xs text-zinc-500 hidden sm:inline border border-zinc-700 rounded px-2 py-1">Letters jump to Marks • 'R' jumps to Repeat</span>
             </div>
 
             <div class="absolute left-1/2 transform -translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md">
@@ -251,8 +251,8 @@
         let autoScrollEnabled = true;
         let currentStudentTranspose = 0;
         let hostRehearsalMarks = {}; 
+        let hostRepeatMarks = []; 
         
-        // Annotation variables
         let isDrawMode = false;
         let currentDrawBox = null;
         let startX, startY;
@@ -349,27 +349,25 @@
         }
 
         function resetSession() {
-            // Clean up state
             roomCode = "";
             currentXmlData = null;
             currentMeasureNumber = 1;
             currentStudentTranspose = 0;
             hostRehearsalMarks = {};
+            hostRepeatMarks = [];
             studentAnnotations = [];
 
-            // Reset Host View Visuals
             document.getElementById('drop-zone').classList.remove('hidden-view');
             document.getElementById('osmd-host-wrapper').classList.add('hidden-view');
             document.getElementById('host-bar-display').innerText = "Bar: 1";
             document.getElementById('host-room-code').innerText = "----";
-            document.getElementById('file-input').value = ""; // Clear file cache
+            document.getElementById('file-input').value = ""; 
 
             if (osmdHost) {
-                document.getElementById('osmd-host-container').innerHTML = ""; // Destroy graphics
+                document.getElementById('osmd-host-container').innerHTML = ""; 
                 osmdHost = null; 
             }
 
-            // Reset Student View Visuals
             document.getElementById('student-placeholder').classList.remove('hidden-view');
             document.getElementById('osmd-student-wrapper').classList.add('hidden-view');
             document.getElementById('student-bar-display').innerText = "Bar: 1";
@@ -382,7 +380,7 @@
             selector.classList.add('bg-zinc-800', 'border-zinc-700');
 
             if (osmdStudent) {
-                document.getElementById('osmd-student-container').innerHTML = ""; // Destroy graphics
+                document.getElementById('osmd-student-container').innerHTML = ""; 
                 osmdStudent = null;
             }
         }
@@ -527,6 +525,7 @@
             currentXmlData = xmlContent;
             
             hostRehearsalMarks = {};
+            hostRepeatMarks = [];
             try {
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(currentXmlData, "text/xml");
@@ -534,15 +533,28 @@
                 if(parts.length > 0) {
                     const measures = parts[0].getElementsByTagName("measure");
                     for(let m=0; m<measures.length; m++) {
+                        const measureNum = parseInt(measures[m].getAttribute("number") || (m+1));
+                        
+                        // Parse Rehearsal Letters
                         const rehearsals = measures[m].getElementsByTagName("rehearsal");
                         if(rehearsals.length > 0) {
                             const mark = rehearsals[0].textContent.trim().toUpperCase();
-                            const measureNum = parseInt(measures[m].getAttribute("number") || (m+1));
                             hostRehearsalMarks[mark] = measureNum;
                         }
+                        
+                        // Parse Repeat Starts
+                        const repeats = measures[m].getElementsByTagName("repeat");
+                        for(let r=0; r<repeats.length; r++) {
+                            if(repeats[r].getAttribute("direction") === "forward") {
+                                if(!hostRepeatMarks.includes(measureNum)) {
+                                    hostRepeatMarks.push(measureNum);
+                                }
+                            }
+                        }
                     }
+                    hostRepeatMarks.sort((a, b) => a - b);
                 }
-            } catch(e) { console.warn("Could not parse rehearsal marks", e); }
+            } catch(e) { console.warn("Could not parse XML markers", e); }
 
             try {
                 document.getElementById('drop-zone').classList.add('hidden-view');
@@ -616,6 +628,9 @@
         }
 
         document.addEventListener('keydown', (e) => {
+            // Prevent shortcuts from triggering if typing in an input
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
             if (currentView === 'host') {
                 if (e.code === 'Space' || e.code === 'ArrowRight') {
                     e.preventDefault();
@@ -623,6 +638,21 @@
                 } else if (e.code === 'ArrowLeft') {
                     e.preventDefault();
                     advanceHostMeasure(currentMeasureNumber - 1);
+                } else if (e.code === 'KeyR' || e.key.toUpperCase() === 'R') {
+                    e.preventDefault();
+                    let target = 1; 
+                    for(let i = hostRepeatMarks.length - 1; i >= 0; i--) {
+                        if(hostRepeatMarks[i] <= currentMeasureNumber) {
+                            if (hostRepeatMarks[i] === currentMeasureNumber && i > 0) {
+                                target = hostRepeatMarks[i-1];
+                            } else {
+                                target = hostRepeatMarks[i];
+                            }
+                            break;
+                        }
+                    }
+                    advanceHostMeasure(target);
+                    showToast(`Jumped to Repeat (Bar ${target})`, 'info');
                 } else if (/^[A-Z]$/.test(e.key.toUpperCase())) {
                     const mark = e.key.toUpperCase();
                     if (hostRehearsalMarks[mark]) {
@@ -749,7 +779,6 @@
             }
         };
 
-        // --- LOCAL ANNOTATIONS (DRAWING) LOGIC ---
         window.toggleDrawMode = function() {
             isDrawMode = !isDrawMode;
             const btn = document.getElementById('btn-draw');
