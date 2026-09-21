@@ -48,6 +48,77 @@
             z-index: 30;
             mix-blend-mode: screen;
         }
+
+        /* --- Light / Paper Mode Overrides --- */
+        body.light-mode #view-host, 
+        body.light-mode #view-student, 
+        body.light-mode #osmd-host-wrapper, 
+        body.light-mode #osmd-student-wrapper, 
+        body.light-mode #student-placeholder {
+            background-color: #ffffff !important;
+        }
+        body.light-mode header {
+            background-color: #f4f4f5 !important;
+            border-color: #e4e4e7 !important;
+        }
+        body.light-mode header h2,
+        body.light-mode header .text-white,
+        body.light-mode header .text-zinc-100 {
+            color: #09090b !important;
+        }
+        body.light-mode header .text-zinc-400,
+        body.light-mode header .text-zinc-300,
+        body.light-mode header .text-zinc-500 {
+            color: #52525b !important;
+        }
+        body.light-mode header .bg-black,
+        body.light-mode header .bg-zinc-800,
+        body.light-mode header .bg-zinc-950,
+        body.light-mode header .bg-zinc-900 {
+            background-color: #ffffff !important;
+            border-color: #d4d4d8 !important;
+        }
+        body.light-mode input,
+        body.light-mode select {
+            background-color: #ffffff !important;
+            color: #09090b !important;
+        }
+        body.light-mode select option {
+            background-color: #ffffff !important;
+            color: #09090b !important;
+        }
+        body.light-mode header button.bg-zinc-800 {
+            background-color: #ffffff !important;
+            border-color: #d4d4d8 !important;
+        }
+        body.light-mode header button.bg-zinc-800:hover {
+            background-color: #f4f4f5 !important;
+        }
+        body.light-mode header button.bg-red-600 {
+            background-color: #dc2626 !important;
+            color: #ffffff !important;
+            border-color: #dc2626 !important;
+        }
+        body.light-mode header button.bg-red-600 i,
+        body.light-mode header button.bg-red-600 span {
+            color: #ffffff !important;
+        }
+        body.light-mode header button.bg-green-600\/20 {
+            background-color: #dcfce7 !important; 
+            color: #166534 !important; 
+        }
+        body.light-mode .measure-highlight-box {
+            mix-blend-mode: multiply !important;
+            background-color: rgba(239, 68, 68, 0.15) !important;
+        }
+        body.light-mode #drop-zone {
+            background-color: #f4f4f5 !important;
+            border-color: #d4d4d8 !important;
+        }
+        body.light-mode #drop-zone h3,
+        body.light-mode #drop-zone p {
+            color: #09090b !important;
+        }
     </style>
 </head>
 <body class="h-screen w-screen overflow-hidden flex flex-col bg-zinc-950 text-zinc-100 pb-6 relative">
@@ -102,6 +173,10 @@
             </div>
             
             <div class="flex items-center gap-2 sm:gap-4">
+                <button onclick="toggleTheme()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Toggle Theme">
+                    <i class="fa-solid fa-sun theme-toggle-icon"></i>
+                </button>
+
                 <!-- Advanced Host Controls -->
                 <div class="hidden md:flex items-center gap-1 bg-black px-2 py-1.5 rounded-lg border border-zinc-700 shadow-inner">
                     <i class="fa-solid fa-stopwatch text-zinc-500 mx-1"></i>
@@ -207,6 +282,9 @@
                 </div>
 
                 <div class="flex gap-2">
+                    <button onclick="toggleTheme()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium" title="Toggle Theme">
+                        <i class="fa-solid fa-sun theme-toggle-icon"></i>
+                    </button>
                     <button id="btn-draw" onclick="toggleDrawMode()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium" title="Draw Annotations">
                         <i class="fa-solid fa-highlighter"></i>
                     </button>
@@ -250,7 +328,7 @@
 
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
         <div>HaySync App</div>
-        <div>v2.5.1 • Master Playback & Native Metronome Audio</div>
+        <div>v2.6.0 • Metronome Audio & Light Mode</div>
     </footer>
 
     <script type="module">
@@ -290,6 +368,7 @@
         let osmdStudent = null;
         let roomCode = "";
         let currentXmlData = null; 
+        let isLightMode = false;
         
         // Rehearsal & Sync States
         let currentMeasureNumber = 1;
@@ -346,6 +425,40 @@
             "REED", "KEYS", "TRIO", "SOLO", "DUET", "FAST", "SLOW", "LOUD",
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
+
+        window.toggleTheme = function() {
+            isLightMode = !isLightMode;
+            if (isLightMode) {
+                document.body.classList.add('light-mode');
+                showToast('Paper Mode Enabled', 'info');
+            } else {
+                document.body.classList.remove('light-mode');
+                showToast('Dark Mode Enabled', 'info');
+            }
+            
+            const themeBtns = document.querySelectorAll('.theme-toggle-icon');
+            themeBtns.forEach(icon => {
+                if (isLightMode) {
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                } else {
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                }
+            });
+
+            if (osmdHost && currentXmlData) {
+                osmdHost.setOptions({ darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7" });
+                osmdHost.render();
+                highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
+            }
+            if (osmdStudent && currentXmlData) {
+                osmdStudent.setOptions({ darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7" });
+                osmdStudent.render();
+                loadAnnotations();
+                highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
+            }
+        };
 
         window.fetchDriveFiles = async function(folderId = null, folderName = null) {
             document.getElementById('drive-modal').classList.remove('hidden-view');
@@ -709,8 +822,8 @@
                     backend: "svg",
                     drawTitle: true,
                     drawPartNames: true,
-                    darkMode: true, 
-                    defaultColorMusic: "#e4e4e7"
+                    darkMode: !isLightMode, 
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
                 });
                 setupHostClickInteractions();
             }
@@ -724,8 +837,8 @@
                     backend: "svg",
                     drawTitle: false,
                     drawPartNames: false,
-                    darkMode: true,
-                    defaultColorMusic: "#e4e4e7"
+                    darkMode: !isLightMode,
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
                 });
             }
         }
@@ -974,7 +1087,11 @@
             const totalTranspose = (currentStudentTranspose * 12) + currentStudentKeyTranspose;
             
             // 1. Apply transposition via the official OSMD options API BEFORE loading
-            osmdStudent.setOptions({ transpose: totalTranspose });
+            osmdStudent.setOptions({ 
+                transpose: totalTranspose,
+                darkMode: !isLightMode,
+                defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
+            });
 
             // 2. Load the raw XML
             await osmdStudent.load(currentXmlData);
