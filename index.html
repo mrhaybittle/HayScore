@@ -377,7 +377,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.7.0 • Updated: 21 Sep 2026, 19:05 AEST (Sydney)</div>
+        <div>v2.7.1 • Updated: 22 Sep 2026, 09:29 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -653,7 +653,9 @@
                 dot.style.opacity = '1';
                 setTimeout(() => { dot.style.opacity = '0'; }, 100); 
             }
-            playMetronomeClick(); 
+            if (currentView === 'host') {
+                playMetronomeClick(); 
+            }
         }
 
         function updateProgressUI() {
