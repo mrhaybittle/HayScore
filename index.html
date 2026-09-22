@@ -155,7 +155,7 @@
                     <i class="fa-solid fa-chalkboard-user text-4xl text-red-500"></i>
                 </div>
                 <span class="text-2xl font-bold">Host Rehearsal</span>
-                <span class="text-sm text-zinc-500">Load music, control the session (TEACHERS) </span>
+                <span class="text-sm text-zinc-500">Load music, control the session</span>
             </button>
             
             <button onclick="switchView('student')" class="flex-1 bg-zinc-900 hover:bg-zinc-800 border-2 border-zinc-800 hover:border-red-600 text-zinc-100 rounded-xl p-8 shadow-2xl transition-all flex flex-col items-center gap-4 group">
@@ -250,7 +250,7 @@
         </div>
 
         <div class="flex flex-1 relative overflow-hidden bg-zinc-950">
-            <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 touch-pan-x touch-pan-y bg-zinc-950">
+            <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
                 <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
                 <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
             </div>
@@ -353,6 +353,9 @@
                     <button id="btn-draw" onclick="toggleDrawMode()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Draw Annotations">
                         <i class="fa-solid fa-highlighter"></i>
                     </button>
+                    <button onclick="clearAnnotations()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-red-600 hover:text-white hover:border-red-500 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Clear Annotations">
+                        <i class="fa-solid fa-eraser"></i>
+                    </button>
                     <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Auto-Scroll">
                         <i class="fa-solid fa-angles-down"></i>
                     </button>
@@ -415,7 +418,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.10.2 • Updated: 22 Sep 2026, 13:08 AEST (Sydney)</div>
+        <div>v2.11.0 • Updated: 22 Sep 2026, 13:40 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -1573,6 +1576,24 @@
                 studentAnnotations = [];
             }
         }
+
+        window.clearAnnotations = function() {
+            if(!currentXmlData) return;
+            if(confirm("Are you sure you want to delete all highlights for this part?")) {
+                const songFootprint = currentXmlData.length;
+                const partIdx = document.getElementById('part-selector').value;
+                const key = `hayscore_ann_${songFootprint}_${partIdx}`;
+                
+                localStorage.removeItem(key);
+                studentAnnotations = [];
+                
+                let layer = document.getElementById('annotation-layer');
+                if(layer) {
+                    layer.innerHTML = '';
+                }
+                showToast('Highlights cleared.', 'success');
+            }
+        };
 
         // --- BUILT-IN TUNER ---
         window.toggleTuner = async function() {
