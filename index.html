@@ -74,8 +74,7 @@
         body.light-mode header .bg-black,
         body.light-mode header .bg-zinc-800,
         body.light-mode header .bg-zinc-950,
-        body.light-mode header .bg-zinc-900,
-        body.light-mode #host-roster-sidebar {
+        body.light-mode header .bg-zinc-900 {
             background-color: #ffffff !important;
             border-color: #d4d4d8 !important;
         }
@@ -83,7 +82,6 @@
         body.light-mode select {
             background-color: #ffffff !important;
             color: #09090b !important;
-            border-color: #d4d4d8 !important;
         }
         body.light-mode select option {
             background-color: #ffffff !important;
@@ -92,10 +90,6 @@
         body.light-mode header button.bg-zinc-800 {
             background-color: #ffffff !important;
             border-color: #d4d4d8 !important;
-            color: #09090b !important;
-        }
-        body.light-mode header button.bg-zinc-800 i {
-            color: #52525b !important;
         }
         body.light-mode header button.bg-zinc-800:hover {
             background-color: #f4f4f5 !important;
@@ -169,11 +163,6 @@
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100 hidden lg:block">Conductor</h2>
-                
-                <div class="hidden md:flex items-center gap-2 bg-black px-3 py-1.5 rounded-lg border border-zinc-700 ml-2">
-                    <i class="fa-solid fa-magnifying-glass text-zinc-500 text-xs"></i>
-                    <input type="range" id="host-zoom-slider" min="0.3" max="2.5" step="0.1" value="1.0" class="w-20" onchange="changeZoom(this.value, 'host')">
-                </div>
             </div>
 
             <div class="absolute left-1/2 transform -translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md">
@@ -204,11 +193,16 @@
                 <button id="btn-focus" onclick="toggleFocusMode()" class="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-500 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Blur student screens">
                     <i class="fa-solid fa-eye"></i> <span class="hidden xl:inline">Eyes on Me</span>
                 </button>
-                
-                <button onclick="toggleRoster()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="View Roster">
-                    <i class="fa-solid fa-list-ul"></i>
-                </button>
 
+                <!-- Broadcast Control -->
+                <div class="hidden md:flex items-center gap-1 bg-black px-2 py-1.5 rounded-lg border border-zinc-700 shadow-inner">
+                    <i class="fa-solid fa-bullhorn text-zinc-500 mx-1"></i>
+                    <input type="text" id="broadcast-input" placeholder="Broadcast..." class="bg-transparent text-white w-24 text-sm outline-none" maxlength="40">
+                    <button onclick="sendBroadcast()" class="w-7 h-7 rounded bg-blue-600/20 text-blue-500 hover:bg-blue-600 flex items-center justify-center transition hover:text-white" title="Send Message to All">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+                
                 <div class="bg-black px-3 py-1.5 rounded-lg border border-red-900/50 shadow-inner">
                     <span class="text-zinc-500 text-xs uppercase tracking-wider mr-1 hidden sm:inline">CODE:</span>
                     <span id="host-room-code" class="text-xl font-bold text-red-500 tracking-widest font-mono uppercase">----</span>
@@ -233,22 +227,9 @@
             </div>
         </div>
 
-        <div class="flex flex-1 relative overflow-hidden bg-zinc-950">
-            <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 touch-pan-x touch-pan-y">
-                <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
-                <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
-            </div>
-
-            <!-- HOST ROSTER SIDEBAR -->
-            <div id="host-roster-sidebar" class="hidden-view w-64 bg-zinc-900 border-l border-zinc-800 flex flex-col h-full shadow-xl z-20">
-                <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-black/20">
-                    <h3 class="font-bold text-zinc-100"><i class="fa-solid fa-users mr-2 text-red-500"></i> Live Roster</h3>
-                    <span id="roster-count" class="text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400">0</span>
-                </div>
-                <div id="roster-list" class="flex-1 overflow-auto p-2 space-y-1 osmd-scroll">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
+        <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
+            <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
+            <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
         </div>
     </div>
 
@@ -260,6 +241,12 @@
             <i class="fa-solid fa-eye text-9xl text-red-600 mb-8 animate-pulse drop-shadow-[0_0_25px_rgba(220,38,38,0.8)]"></i>
             <h2 class="text-5xl sm:text-6xl font-black text-white tracking-widest uppercase shadow-black drop-shadow-2xl text-center px-4">Eyes on Conductor</h2>
             <p class="text-zinc-400 mt-4 text-xl font-medium">Please stop playing and look up.</p>
+        </div>
+
+        <!-- Broadcast Overlay -->
+        <div id="broadcast-overlay" class="hidden-view absolute inset-0 z-[110] backdrop-blur-xl bg-blue-900/80 flex flex-col items-center justify-center transition-all duration-300">
+            <i class="fa-solid fa-bullhorn text-7xl text-blue-300 mb-6 animate-bounce drop-shadow-lg"></i>
+            <h2 id="broadcast-text" class="text-6xl sm:text-7xl font-black text-white tracking-wide shadow-black drop-shadow-2xl text-center px-4 leading-tight uppercase">MESSAGE</h2>
         </div>
 
         <!-- Built-in Tuner Overlay -->
@@ -320,20 +307,15 @@
                 </div>
 
                 <div class="flex gap-2">
-                    <button id="btn-tuner" onclick="toggleTuner()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Tuner">
-                        <i class="fa-solid fa-microphone"></i>
-                    </button>
-                    <button onclick="toggleTheme()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Theme">
+                    <button onclick="toggleTheme()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium" title="Toggle Theme">
                         <i class="fa-solid fa-sun theme-toggle-icon"></i>
                     </button>
-                    <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Auto-Scroll">
+                    <button id="btn-draw" onclick="toggleDrawMode()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium" title="Draw Annotations">
+                        <i class="fa-solid fa-highlighter"></i>
+                    </button>
+                    <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium" title="Toggle Auto-Scroll">
                         <i class="fa-solid fa-angles-down"></i>
                     </button>
-                </div>
-                
-                <div class="hidden md:flex items-center gap-2 bg-black px-2 py-1 rounded-lg border border-zinc-700">
-                    <i class="fa-solid fa-magnifying-glass text-zinc-500 text-[10px]"></i>
-                    <input type="range" id="student-zoom-slider" min="0.3" max="2.5" step="0.1" value="1.0" class="w-16 h-1" onchange="changeZoom(this.value, 'student')">
                 </div>
             </div>
         </header>
@@ -350,7 +332,7 @@
             </div>
         </div>
         
-        <div id="osmd-student-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-6 bg-zinc-950 touch-pan-x touch-pan-y">
+        <div id="osmd-student-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-6 bg-zinc-950">
             <div id="student-highlight-box" class="measure-highlight-box hidden-view"></div>
             <div id="osmd-student-container" class="w-full min-h-full relative select-none"></div>
         </div>
@@ -377,7 +359,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.7.1 • Updated: 22 Sep 2026, 09:29 AEST (Sydney)</div>
+        <div>v2.6.6 • Updated: 22 Sep 2026, 11:26 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -422,9 +404,8 @@
         // Rehearsal & Sync States
         let currentMeasureNumber = 1;
         let autoScrollEnabled = true;
-        let currentStudentTranspose = 0; 
-        let currentStudentKeyTranspose = 0; 
-        let totalMeasuresCache = 0;
+        let currentStudentTranspose = 0; // Octaves
+        let currentStudentKeyTranspose = 0; // Semitones for Instrument Key
         
         let hostRehearsalMarks = {}; 
         let hostRepeatMarks = []; 
@@ -436,21 +417,6 @@
         let bpm = 100;
         let playInterval = null;
         let metroInterval = null;
-
-        // Zoom 
-        let hostZoom = 1.0;
-        let studentZoom = 1.0;
-
-        // Tuner
-        let tunerActive = false;
-        let audioContext = null;
-        let analyser = null;
-        let microphone = null;
-        let tunerRafId = null;
-
-        // Student Roster Name
-        let localStudentName = "Student";
-        let localStudentId = null;
 
         // Web Audio Context for Metronome Click
         let audioCtx = null;
@@ -467,10 +433,10 @@
             const gain = audioCtx.createGain();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(1000, audioCtx.currentTime); 
+            osc.frequency.setValueAtTime(1000, audioCtx.currentTime); // High pitch woodblock click sound
 
             gain.gain.setValueAtTime(1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05); 
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05); // Short snappy burst
 
             osc.connect(gain);
             gain.connect(audioCtx.destination);
@@ -478,6 +444,11 @@
             osc.start();
             osc.stop(audioCtx.currentTime + 0.05);
         }
+
+        let isDrawMode = false;
+        let currentDrawBox = null;
+        let startX, startY;
+        let studentAnnotations = [];
 
         const SAFE_WORD_CODES = [
             "BAND", "NOTE", "BEAT", "SONG", "TUNE", "DRUM", "HORN", "BASS",
@@ -515,6 +486,7 @@
             if (osmdStudent && currentXmlData) {
                 osmdStudent.setOptions({ darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7" });
                 osmdStudent.render();
+                loadAnnotations();
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
         };
@@ -653,19 +625,18 @@
                 dot.style.opacity = '1';
                 setTimeout(() => { dot.style.opacity = '0'; }, 100); 
             }
-            if (currentView === 'host') {
-                playMetronomeClick(); 
-            }
+            playMetronomeClick(); // Play synchronized click sound
         }
 
-        function updateProgressUI() {
-            if(totalMeasuresCache <= 0) return;
-            const pct = Math.min(100, Math.round((currentMeasureNumber / totalMeasuresCache) * 100));
-            const bar = document.getElementById('measure-progress-bar');
-            const text = document.getElementById('measure-progress-text');
-            if(bar) bar.style.width = `${pct}%`;
-            if(text) text.innerText = `Bar ${currentMeasureNumber} of ${totalMeasuresCache} • ${pct}%`;
-        }
+        window.sendBroadcast = function() {
+            const input = document.getElementById('broadcast-input');
+            const msg = input.value.trim();
+            if (!msg || !isFirebaseActive || !roomCode) return;
+            
+            set(ref(db, `rooms/${roomCode}/broadcast`), { text: msg, timestamp: Date.now() });
+            input.value = '';
+            showToast('Message broadcasted to students!', 'success');
+        };
 
         function attachRoomListeners(code, role) {
             const dotId = role === 'host' ? 'metro-dot-host' : 'metro-dot-student';
@@ -682,18 +653,22 @@
                     if(isFocus) overlay.classList.remove('hidden-view');
                     else overlay.classList.add('hidden-view');
                 });
-            } else if (role === 'host') {
-                onValue(ref(db, `rooms/${code}/roster`), (snap) => {
-                    const rosterData = snap.val() || {};
-                    const rosterList = document.getElementById('roster-list');
-                    if(rosterList) {
-                        rosterList.innerHTML = '';
-                        const keys = Object.keys(rosterData);
-                        document.getElementById('roster-count').innerText = keys.length;
-                        keys.forEach(k => {
-                            const r = rosterData[k];
-                            rosterList.innerHTML += `<div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700"><span class="font-bold text-zinc-200">${r.name}</span><span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span></div>`;
-                        });
+
+                let lastBroadcastTime = 0;
+                onValue(ref(db, `rooms/${code}/broadcast`), (snap) => {
+                    const data = snap.val();
+                    if(data && data.text && data.timestamp > lastBroadcastTime) {
+                        if (Date.now() - data.timestamp < 10000) {
+                            lastBroadcastTime = data.timestamp;
+                            const overlay = document.getElementById('broadcast-overlay');
+                            document.getElementById('broadcast-text').innerText = data.text;
+                            overlay.classList.remove('hidden-view');
+                            setTimeout(() => {
+                                overlay.classList.add('hidden-view');
+                            }, 2000);
+                        } else {
+                            lastBroadcastTime = data.timestamp; 
+                        }
                     }
                 });
             }
@@ -720,11 +695,6 @@
                 showToast('Focus Mode Disabled.', 'info');
             }
             if (isFirebaseActive && roomCode) set(ref(db, `rooms/${roomCode}/focusMode`), focusActive);
-        };
-
-        window.toggleRoster = function() {
-            const sidebar = document.getElementById('host-roster-sidebar');
-            if(sidebar) sidebar.classList.toggle('hidden-view');
         };
 
         window.toggleMetronome = function() {
@@ -755,6 +725,7 @@
                 btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
                 showToast(`Auto-Playback Sweep started at ${bpm} BPM`, 'success');
                 
+                // Advance measure roughly every 4 beats
                 const measureDuration = (60000 / bpm) * 4;
                 playInterval = setInterval(() => {
                     advanceHostMeasure(currentMeasureNumber + 1);
@@ -770,10 +741,6 @@
         };
 
         function resetSession() {
-            if(isFirebaseActive && roomCode && localStudentId) {
-                remove(ref(db, `rooms/${roomCode}/roster/${localStudentId}`));
-            }
-
             roomCode = "";
             currentXmlData = null;
             currentMeasureNumber = 1;
@@ -781,14 +748,12 @@
             currentStudentKeyTranspose = 0;
             hostRehearsalMarks = {};
             hostRepeatMarks = [];
+            studentAnnotations = [];
             focusActive = false;
             metronomeActive = false;
             playbackActive = false;
-            totalMeasuresCache = 0;
             clearInterval(metroInterval);
             clearInterval(playInterval);
-            
-            if(tunerActive) toggleTuner();
 
             // Reset Host Controls
             document.getElementById('btn-focus').classList.remove('bg-red-600', 'text-white', 'border-red-500');
@@ -798,13 +763,10 @@
             document.getElementById('btn-play').classList.remove('bg-red-600', 'text-white');
             document.getElementById('btn-play').classList.add('bg-green-600/20', 'text-green-500');
             document.getElementById('btn-play').innerHTML = '<i class="fa-solid fa-play"></i>';
+            document.getElementById('broadcast-input').value = "";
 
             document.getElementById('drop-zone').classList.remove('hidden-view');
             document.getElementById('osmd-host-wrapper').classList.add('hidden-view');
-            
-            const sidebar = document.getElementById('host-roster-sidebar');
-            if(sidebar) sidebar.classList.add('hidden-view');
-            
             document.getElementById('host-bar-display').innerText = "Bar: 1";
             document.getElementById('host-room-code').innerText = "----";
             document.getElementById('file-input').value = ""; 
@@ -815,6 +777,7 @@
             }
 
             document.getElementById('focus-overlay').classList.add('hidden-view');
+            document.getElementById('broadcast-overlay').classList.add('hidden-view');
             document.getElementById('student-placeholder').classList.remove('hidden-view');
             document.getElementById('osmd-student-wrapper').classList.add('hidden-view');
             document.getElementById('student-bar-display').innerText = "Bar: 1";
@@ -826,9 +789,6 @@
             selector.innerHTML = '<option value="" disabled selected>Select Part...</option>';
             selector.classList.remove('bg-red-600', 'border-red-400', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
             selector.classList.add('bg-zinc-800', 'border-zinc-700');
-            
-            document.getElementById('measure-progress-bar').style.width = '0%';
-            document.getElementById('measure-progress-text').innerText = 'Bar 0 of 0 • 0%';
 
             if (osmdStudent) {
                 document.getElementById('osmd-student-container').innerHTML = ""; 
@@ -877,12 +837,9 @@
         window.joinRehearsal = function() {
             const input = document.getElementById('join-code-input').value.toUpperCase().trim();
             if (input.length < 4 || input.length > 5) {
-                showToast('Please enter a valid word code.', 'error');
+                showToast('Please enter a valid 4 or 5-letter word code.', 'error');
                 return;
             }
-            
-            localStudentName = prompt("Enter your name for the roster:") || "Student";
-            localStudentId = "stu_" + Math.random().toString(36).substr(2, 9);
             
             showToast(`Connecting to ${input}...`, 'info');
             
@@ -908,10 +865,6 @@
                             populateStudentParts(currentXmlData);
                             
                             attachRoomListeners(input, 'student');
-                            
-                            const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
-                            set(myRosterRef, { name: localStudentName, partName: "" });
-                            onDisconnect(myRosterRef).remove();
                         } else {
                             showToast('Room exists, but host has not loaded music yet.', 'error');
                         }
@@ -1021,14 +974,9 @@
                 document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
                 
                 await osmdHost.load(currentXmlData);
-                osmdHost.zoom = hostZoom;
                 osmdHost.render();
-                totalMeasuresCache = osmdHost.graphic.measureList.length;
                 
-                setTimeout(() => { 
-                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
-                    updateProgressUI();
-                }, 200);
+                setTimeout(() => { highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); }, 200);
                 showToast('Score rendered successfully!', 'success');
             } catch (err) {
                 showToast('Failed to draw sheet music.', 'error');
@@ -1065,7 +1013,7 @@
                         const size = stave.PositionAndShape.Size;
                         if (pos && size) {
                             validCount++;
-                            const x = pos.x * 10 * osmdInstance.zoom, y = pos.y * 10 * osmdInstance.zoom, w = size.width * 10 * osmdInstance.zoom, h = size.height * 10 * osmdInstance.zoom;
+                            const x = pos.x * 10, y = pos.y * 10, w = size.width * 10, h = size.height * 10;
                             if (x < minX) minX = x;
                             if (y < minY) minY = y;
                             if ((x + w) > maxX) maxX = x + w;
@@ -1136,7 +1084,6 @@
             
             currentMeasureNumber = targetMeasure;
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
-            updateProgressUI();
             
             if (isFirebaseActive && roomCode) {
                 set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
@@ -1169,11 +1116,6 @@
             const selector = document.getElementById('part-selector');
             selector.classList.remove('bg-red-600', 'border-red-400', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
             selector.classList.add('bg-zinc-800', 'border-zinc-700');
-
-            const partName = selector.options[selector.selectedIndex].text;
-            if(isFirebaseActive && roomCode && localStudentId) {
-                set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/partName`), partName);
-            }
             
             showToast('Loading your part...', 'info');
             document.getElementById('student-placeholder').classList.add('hidden-view');
@@ -1202,43 +1144,46 @@
         };
 
         async function renderStudentTransposedXml(partIndex) {
+            // Calculate total semitone shift (Octaves + Instrument Key)
             const totalTranspose = (currentStudentTranspose * 12) + currentStudentKeyTranspose;
             
+            // 1. Re-apply visual options
             osmdStudent.setOptions({ 
                 darkMode: !isLightMode,
                 defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
             });
 
+            // 2. Load the raw XML
             await osmdStudent.load(currentXmlData);
 
+            // 3. Initialize Transpose Calculator if needed
             if (!osmdStudent.TransposeCalculator && window.opensheetmusicdisplay && window.opensheetmusicdisplay.TransposeCalculator) {
                 osmdStudent.TransposeCalculator = new window.opensheetmusicdisplay.TransposeCalculator();
             }
 
+            // 4. Apply transposition
             const sheet = osmdStudent.Sheet || osmdStudent.sheet;
             if (sheet) {
                 sheet.Transpose = totalTranspose;
                 
+                // 5. Isolate the correct instrument part
                 for(let i = 0; i < sheet.Instruments.length; i++) {
                     sheet.Instruments[i].Visible = (i === partIndex);
                 }
             }
             
+            // 6. Force the graphic update to recalculate the key signatures/notes
             try { 
                 osmdStudent.updateGraphic(); 
             } catch(e) { 
                 console.warn("Graphic update issue", e); 
             }
             
-            osmdStudent.zoom = studentZoom;
+            // 7. Draw it to the screen
             osmdStudent.render();
             
-            totalMeasuresCache = osmdStudent.graphic.measureList.length;
-            
-            setTimeout(() => { 
-                syncToMeasure(currentMeasureNumber);
-                updateProgressUI();
-            }, 200);
+            loadAnnotations();
+            setTimeout(() => syncToMeasure(currentMeasureNumber), 200);
             showToast('Ready to play.', 'success');
         }
 
@@ -1246,7 +1191,6 @@
             currentMeasureNumber = measureNumber;
             if (!osmdStudent || !osmdStudent.graphic) return;
             highlightMeasure(osmdStudent, 'student-highlight-box', measureNumber, 'osmd-student-wrapper');
-            updateProgressUI();
         }
 
         window.toggleAutoScroll = function() {
@@ -1263,130 +1207,103 @@
             }
         };
 
-        // --- ZOOM & PINCH GESTURES ---
-        window.changeZoom = function(val, role) {
-            if(role === 'host' && osmdHost) {
-                hostZoom = parseFloat(val); 
-                osmdHost.zoom = hostZoom; 
-                osmdHost.render();
-                highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
-            }
-            if(role === 'student' && osmdStudent) {
-                studentZoom = parseFloat(val); 
-                osmdStudent.zoom = studentZoom; 
-                osmdStudent.render();
-                highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
-            }
-        }
-
-        function setupPinchZoom(wrapperId, role) {
-            const wrapper = document.getElementById(wrapperId);
-            if(!wrapper) return;
-            let initialDist = null;
-            let initialZoom = 1.0;
-            wrapper.addEventListener('touchstart', (e) => {
-                if(e.touches.length === 2) {
-                    initialDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-                    initialZoom = role === 'host' ? hostZoom : studentZoom;
-                }
-            }, {passive: true});
-            wrapper.addEventListener('touchmove', (e) => {
-                if(e.touches.length === 2 && initialDist) {
-                    let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-                    let scale = currentDist / initialDist;
-                    let newZoom = Math.max(0.3, Math.min(2.5, initialZoom * scale));
-                    
-                    if(role === 'host') {
-                        const slider = document.getElementById('host-zoom-slider');
-                        if (slider) slider.value = newZoom;
-                    }
-                    if(role === 'student') {
-                        const slider = document.getElementById('student-zoom-slider');
-                        if (slider) slider.value = newZoom;
-                    }
-                    
-                    changeZoom(newZoom, role);
-                }
-            }, {passive: true});
-            wrapper.addEventListener('touchend', (e) => { if(e.touches.length < 2) initialDist = null; });
-        }
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            setupPinchZoom('osmd-host-wrapper', 'host');
-            setupPinchZoom('osmd-student-wrapper', 'student');
-        });
-
-        // --- BUILT-IN TUNER ---
-        window.toggleTuner = async function() {
-            tunerActive = !tunerActive;
-            const btn = document.getElementById('btn-tuner');
-            const overlay = document.getElementById('tuner-overlay');
-            if(tunerActive) {
-                btn.className = "bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium flex items-center justify-center";
-                overlay.classList.remove('hidden-view');
-                try {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 2048;
-                    microphone = audioContext.createMediaStreamSource(stream);
-                    microphone.connect(analyser);
-                    updatePitch();
-                } catch(e) { showToast('Mic access denied.', 'error'); toggleTuner(); }
+        window.toggleDrawMode = function() {
+            isDrawMode = !isDrawMode;
+            const btn = document.getElementById('btn-draw');
+            const wrapper = document.getElementById('osmd-student-wrapper');
+            
+            if(isDrawMode) {
+                btn.classList.add('bg-yellow-500', 'text-black', 'border-yellow-400');
+                btn.classList.remove('bg-zinc-800', 'text-zinc-300', 'border-zinc-700');
+                wrapper.style.cursor = 'crosshair';
+                showToast('Highlighter Mode. Click and drag on the sheet to draw.', 'info');
             } else {
-                btn.className = "bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center";
-                overlay.classList.add('hidden-view');
-                cancelAnimationFrame(tunerRafId);
-                if(audioContext) { audioContext.close(); audioContext = null; }
+                btn.classList.remove('bg-yellow-500', 'text-black', 'border-yellow-400');
+                btn.classList.add('bg-zinc-800', 'text-zinc-300', 'border-zinc-700');
+                wrapper.style.cursor = 'default';
             }
         };
 
-        const noteStrings = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-        function updatePitch() {
-            const buffer = new Float32Array(analyser.fftSize);
-            analyser.getFloatTimeDomainData(buffer);
-            const pitch = autoCorrelate(buffer, audioContext.sampleRate);
+        const studentWrapper = document.getElementById('osmd-student-wrapper');
+        studentWrapper.addEventListener('mousedown', (e) => {
+            if(!isDrawMode) return;
+            const rect = studentWrapper.getBoundingClientRect();
+            startX = e.clientX - rect.left + studentWrapper.scrollLeft;
+            startY = e.clientY - rect.top + studentWrapper.scrollTop;
             
-            if (pitch !== -1) {
-                const noteNum = Math.round(12 * (Math.log(pitch / 440) / Math.log(2))) + 69;
-                const freq = 440 * Math.pow(2, (noteNum - 69) / 12);
-                const cents = Math.floor((1200 * Math.log(pitch / freq)) / Math.log(2));
-                
-                document.getElementById('tuner-note').innerText = noteStrings[noteNum % 12];
-                document.getElementById('tuner-cents').innerText = `${cents > 0 ? '+' : ''}${cents} ¢`;
-                
-                const indicator = document.getElementById('tuner-indicator');
-                const offset = Math.max(-50, Math.min(50, cents));
-                indicator.style.left = `calc(50% + ${offset}%)`;
-                indicator.style.backgroundColor = Math.abs(cents) < 10 ? '#22c55e' : '#ef4444';
+            currentDrawBox = document.createElement('div');
+            currentDrawBox.className = 'absolute bg-yellow-400/40 mix-blend-screen border border-yellow-400/60 rounded pointer-events-none z-40 shadow-[0_0_10px_rgba(250,204,21,0.5)]';
+            currentDrawBox.style.left = startX + 'px';
+            currentDrawBox.style.top = startY + 'px';
+            currentDrawBox.style.width = '0px';
+            currentDrawBox.style.height = '0px';
+            
+            let layer = document.getElementById('annotation-layer');
+            if(!layer) {
+                layer = document.createElement('div');
+                layer.id = 'annotation-layer';
+                layer.className = 'absolute inset-0 pointer-events-none z-40';
+                document.getElementById('osmd-student-container').appendChild(layer);
             }
-            if (!window.requestAnimationFrame) window.requestAnimationFrame = window.webkitRequestAnimationFrame;
-            tunerRafId = window.requestAnimationFrame(updatePitch);
-        }
+            layer.appendChild(currentDrawBox);
+        });
+        
+        studentWrapper.addEventListener('mousemove', (e) => {
+            if(!isDrawMode || !currentDrawBox) return;
+            const rect = studentWrapper.getBoundingClientRect();
+            const currentX = e.clientX - rect.left + studentWrapper.scrollLeft;
+            const currentY = e.clientY - rect.top + studentWrapper.scrollTop;
+            
+            const width = Math.abs(currentX - startX);
+            const height = Math.abs(currentY - startY);
+            currentDrawBox.style.left = Math.min(currentX, startX) + 'px';
+            currentDrawBox.style.top = Math.min(currentY, startY) + 'px';
+            currentDrawBox.style.width = width + 'px';
+            currentDrawBox.style.height = height + 'px';
+        });
+        
+        studentWrapper.addEventListener('mouseup', () => {
+            if(!isDrawMode || !currentDrawBox) return;
+            
+            const songFootprint = currentXmlData ? currentXmlData.length : 'unknown';
+            const partIdx = document.getElementById('part-selector').value;
+            const key = `hayscore_ann_${songFootprint}_${partIdx}`;
+            
+            studentAnnotations.push({
+                left: currentDrawBox.style.left, top: currentDrawBox.style.top,
+                width: currentDrawBox.style.width, height: currentDrawBox.style.height
+            });
+            localStorage.setItem(key, JSON.stringify(studentAnnotations));
+            currentDrawBox = null;
+        });
 
-        function autoCorrelate(buf, sampleRate) {
-            let SIZE = buf.length;
-            let rms = 0;
-            for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
-            rms = Math.sqrt(rms/SIZE);
-            if (rms<0.01) return -1;
+        window.loadAnnotations = function() {
+            const songFootprint = currentXmlData ? currentXmlData.length : 'unknown';
+            const partIdx = document.getElementById('part-selector').value;
+            const key = `hayscore_ann_${songFootprint}_${partIdx}`;
+            const saved = localStorage.getItem(key);
             
-            let r1=0, r2=SIZE-1, thres=0.2;
-            for (let i=0; i<SIZE/2; i++) if (Math.abs(buf[i])<thres) { r1=i; break; }
-            for (let i=1; i<SIZE/2; i++) if (Math.abs(buf[SIZE-i])<thres) { r2=SIZE-i; break; }
-            
-            buf = buf.slice(r1,r2);
-            SIZE = buf.length;
-            let c = new Array(SIZE).fill(0);
-            for (let i=0; i<SIZE; i++) for (let j=0; j<SIZE-i; j++) c[i] = c[i] + buf[j]*buf[j+i];
-            
-            let d=0; while (c[d]>c[d+1]) d++;
-            let maxval=-1, maxpos=-1;
-            for (let i=d; i<SIZE; i++) {
-                if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+            let layer = document.getElementById('annotation-layer');
+            if(layer) layer.innerHTML = '';
+            else {
+                layer = document.createElement('div');
+                layer.id = 'annotation-layer';
+                layer.className = 'absolute inset-0 pointer-events-none z-40';
+                document.getElementById('osmd-student-container').appendChild(layer);
             }
-            let T0 = maxpos;
-            return sampleRate/T0;
+            
+            if(saved) {
+                studentAnnotations = JSON.parse(saved);
+                studentAnnotations.forEach(ann => {
+                    const box = document.createElement('div');
+                    box.className = 'absolute bg-yellow-400/40 mix-blend-screen border border-yellow-400/60 rounded pointer-events-none z-40 shadow-[0_0_10px_rgba(250,204,21,0.5)]';
+                    box.style.left = ann.left; box.style.top = ann.top;
+                    box.style.width = ann.width; box.style.height = ann.height;
+                    layer.appendChild(box);
+                });
+            } else {
+                studentAnnotations = [];
+            }
         }
     </script>
 </body>
