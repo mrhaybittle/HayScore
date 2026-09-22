@@ -125,6 +125,13 @@
         body.light-mode #drop-zone p {
             color: #09090b !important;
         }
+        body.light-mode #osmd-host-wrapper svg text,
+        body.light-mode #osmd-host-wrapper svg tspan,
+        body.light-mode #osmd-student-wrapper svg text,
+        body.light-mode #osmd-student-wrapper svg tspan {
+            fill: #000000 !important;
+            color: #000000 !important;
+        }
     </style>
 </head>
 <body class="h-screen w-screen overflow-hidden flex flex-col bg-zinc-950 text-zinc-100 pb-6 relative">
@@ -148,7 +155,7 @@
                     <i class="fa-solid fa-chalkboard-user text-4xl text-red-500"></i>
                 </div>
                 <span class="text-2xl font-bold">Host Rehearsal</span>
-                <span class="text-sm text-zinc-500">Load music, control the session</span>
+                <span class="text-sm text-zinc-500">Load music, control the session (TEACHERS) </span>
             </button>
             
             <button onclick="switchView('student')" class="flex-1 bg-zinc-900 hover:bg-zinc-800 border-2 border-zinc-800 hover:border-red-600 text-zinc-100 rounded-xl p-8 shadow-2xl transition-all flex flex-col items-center gap-4 group">
@@ -156,7 +163,7 @@
                     <i class="fa-solid fa-users text-4xl text-zinc-400 group-hover:text-red-500 transition-colors"></i>
                 </div>
                 <span class="text-2xl font-bold">Join Session</span>
-                <span class="text-sm text-zinc-500">Enter code, follow along</span>
+                <span class="text-sm text-zinc-500">Enter code, follow along (STUDENTS) </span>
             </button>
         </div>
     </div>
@@ -408,7 +415,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.10.0 • Updated: 22 Sep 2026, 12:52 AEST (Sydney)</div>
+        <div>v2.10.1 • Updated: 22 Sep 2026, 13:01 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -590,12 +597,22 @@
             });
 
             if (osmdHost && currentXmlData) {
-                osmdHost.setOptions({ darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7" });
+                osmdHost.setOptions({ 
+                    darkMode: !isLightMode, 
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7" 
+                });
                 osmdHost.render();
                 highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             }
             if (osmdStudent && currentXmlData) {
-                osmdStudent.setOptions({ darkMode: !isLightMode, defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7" });
+                osmdStudent.setOptions({ 
+                    darkMode: !isLightMode, 
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7" 
+                });
                 osmdStudent.render();
                 loadAnnotations();
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
@@ -1061,7 +1078,9 @@
                     drawTitle: true,
                     drawPartNames: true,
                     darkMode: !isLightMode, 
-                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
                 });
                 setupHostClickInteractions();
             }
@@ -1076,7 +1095,9 @@
                     drawTitle: false,
                     drawPartNames: false,
                     darkMode: !isLightMode,
-                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
+                    defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
+                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
                 });
             }
         }
@@ -1338,7 +1359,9 @@
             // 1. Re-apply visual options
             osmdStudent.setOptions({ 
                 darkMode: !isLightMode,
-                defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7"
+                defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
+                defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
+                defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
             });
 
             // 2. Load the raw XML
