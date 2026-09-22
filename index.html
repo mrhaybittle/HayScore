@@ -418,7 +418,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.11.0 • Updated: 22 Sep 2026, 13:40 AEST (Sydney)</div>
+        <div>v2.12.0 • Updated: 23 Sep 2026, 07:00 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -478,6 +478,9 @@
         let playInterval = null;
         let metroInterval = null;
 
+        // Time Signature state
+        let currentTimeSignature = { num: 4, den: 4 };
+
         // Zoom 
         let hostZoom = 1.0;
         let studentZoom = 1.0;
@@ -521,10 +524,11 @@
         let startX, startY;
         let studentAnnotations = [];
 
-        // Student Roster Name & Avatar
+        // Student Roster Name, Avatar & Tab Switch Tally
         let localStudentName = "Student";
         let localStudentId = null;
         let localStudentAvatar = localStorage.getItem('hayscore_avatar') || "👤";
+        let localTabSwitches = 0;
 
         const SAFE_WORD_CODES = [
             "BAND", "NOTE", "BEAT", "SONG", "TUNE", "DRUM", "HORN", "BASS",
@@ -533,7 +537,7 @@
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
-        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","🦀","🦖","👻","👽","🤖","🤠","🤡"];
+        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","crab","🦖","👻","👽","🤖","🤠","🤡"];
 
         window.openAvatarModal = function() {
             const grid = document.getElementById('avatar-grid');
@@ -563,11 +567,16 @@
             document.getElementById('avatar-modal').classList.add('hidden-view');
         };
 
-        // Track visibility for student tab-switching
+        // Track visibility for student tab-switching & keep live tally
         document.addEventListener("visibilitychange", () => {
             if (isFirebaseActive && roomCode && localStudentId && currentView === 'student') {
-                const statusRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}/status`);
-                set(statusRef, document.hidden ? "away" : "active");
+                if (document.hidden) {
+                    localTabSwitches++;
+                    set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/tabSwitches`), localTabSwitches);
+                    set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/status`), "away");
+                } else {
+                    set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/status`), "active");
+                }
             }
         });
 
@@ -832,11 +841,13 @@
                             const awayIcon = isAway ? `<i class="fa-solid fa-moon text-yellow-500 ml-1" title="Tab in background"></i>` : '';
                             const opacityClass = isAway ? 'opacity-60' : '';
                             const stuAvatar = r.avatar || '👤';
+                            const tabSwitches = r.tabSwitches || 0;
+                            const scoreDisplay = tabSwitches > 0 ? `<span class="bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded text-xs font-mono font-bold ml-1 shadow-sm">-${tabSwitches}</span>` : '';
                             rosterList.innerHTML += `
                                 <div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700 ${opacityClass}">
                                     <div class="flex items-center gap-2">
                                         <span class="text-lg">${stuAvatar}</span>
-                                        <span class="font-bold text-zinc-200">${r.name}${awayIcon}</span>
+                                        <span class="font-bold text-zinc-200">${r.name}${awayIcon}${scoreDisplay}</span>
                                     </div>
                                     <span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span>
                                 </div>`;
@@ -849,7 +860,19 @@
                 const data = snap.val();
                 clearInterval(metroInterval);
                 if(data && data.active) {
-                    metroInterval = setInterval(() => flashDot(dotId), 60000 / data.bpm);
+                    const ts = data.timeSig || currentTimeSignature || { num: 4, den: 4 };
+                    let factor = 1.0;
+                    if (ts.den === 8) {
+                        factor = (ts.num % 3 === 0) ? 1.0 : 0.5; // compound vs simple 8ths
+                    } else if (ts.den === 2) {
+                        factor = 2.0;
+                    } else if (ts.den === 16) {
+                        factor = 0.25;
+                    } else {
+                        factor = 4 / ts.den;
+                    }
+                    const intervalMs = (60000 / data.bpm) * factor;
+                    metroInterval = setInterval(() => flashDot(dotId), intervalMs);
                 }
             });
         }
@@ -877,13 +900,13 @@
             if (metronomeActive) {
                 btn.classList.add('bg-red-600', 'text-white');
                 btn.classList.remove('bg-zinc-800', 'text-zinc-300');
-                showToast(`Metronome started at ${bpm} BPM`, 'info');
+                showToast(`Metronome started at ${bpm} BPM (${currentTimeSignature.num}/${currentTimeSignature.den})`, 'info');
             } else {
                 btn.classList.remove('bg-red-600', 'text-white');
                 btn.classList.add('bg-zinc-800', 'text-zinc-300');
             }
             
-            if (isFirebaseActive && roomCode) set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm });
+            if (isFirebaseActive && roomCode) set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
         };
 
         window.togglePlayback = function() {
@@ -897,8 +920,16 @@
                 btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
                 showToast(`Auto-Playback Sweep started at ${bpm} BPM`, 'success');
                 
-                // Advance measure roughly every 4 beats
-                const measureDuration = (60000 / bpm) * 4;
+                // Advance measure according to time signature
+                const beatsInMeasure = (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 === 0) 
+                    ? (currentTimeSignature.num / 3) 
+                    : currentTimeSignature.num;
+                let tickFactor = 1.0;
+                if (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 !== 0) tickFactor = 0.5;
+                else if (currentTimeSignature.den === 2) tickFactor = 2.0;
+                else if (currentTimeSignature.den !== 8 && currentTimeSignature.den !== 4) tickFactor = 4 / currentTimeSignature.den;
+
+                const measureDuration = (60000 / bpm) * tickFactor * beatsInMeasure;
                 playInterval = setInterval(() => {
                     advanceHostMeasure(currentMeasureNumber + 1);
                 }, measureDuration);
@@ -922,6 +953,8 @@
             currentMeasureNumber = 1;
             currentStudentTranspose = 0;
             currentStudentKeyTranspose = 0;
+            currentTimeSignature = { num: 4, den: 4 };
+            localTabSwitches = 0;
             hostRehearsalMarks = {};
             hostRepeatMarks = [];
             studentAnnotations = [];
@@ -1017,7 +1050,7 @@
                 set(roomRef, { 
                     measure: 1, 
                     focusMode: false, 
-                    metronome: {active: false, bpm: 100},
+                    metronome: {active: false, bpm: 100, timeSig: currentTimeSignature},
                     timestamp: Date.now() 
                 });
                 attachRoomListeners(roomCode, 'host');
@@ -1033,6 +1066,7 @@
             
             localStudentName = prompt("Enter your name for the roster:") || "Student";
             localStudentId = "stu_" + Math.random().toString(36).substr(2, 9);
+            localTabSwitches = 0;
             
             showToast(`Connecting to ${input}...`, 'info');
             
@@ -1060,7 +1094,7 @@
                             attachRoomListeners(input, 'student');
                             
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
-                            set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar });
+                            set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar, tabSwitches: 0 });
                             onDisconnect(myRosterRef).remove();
                         } else {
                             showToast('Room exists, but host has not loaded music yet.', 'error');
@@ -1145,6 +1179,17 @@
             try {
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(currentXmlData, "text/xml");
+                
+                // Parse Time Signature
+                const timeNode = xmlDoc.querySelector("time");
+                if (timeNode) {
+                    const beats = parseInt(timeNode.querySelector("beats")?.textContent || "4");
+                    const beatType = parseInt(timeNode.querySelector("beat-type")?.textContent || "4");
+                    currentTimeSignature = { num: beats, den: beatType };
+                } else {
+                    currentTimeSignature = { num: 4, den: 4 };
+                }
+
                 const parts = xmlDoc.getElementsByTagName("part");
                 if(parts.length > 0) {
                     const measures = parts[0].getElementsByTagName("measure");
@@ -1168,7 +1213,7 @@
                     }
                     hostRepeatMarks.sort((a, b) => a - b);
                 }
-            } catch(e) { console.warn("Could not parse XML markers", e); }
+            } catch(e) { console.warn("Could not parse XML markers or time signature", e); }
 
             try {
                 document.getElementById('drop-zone').classList.add('hidden-view');
@@ -1183,14 +1228,17 @@
                     highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); 
                     updateProgressUI();
                 }, 200);
-                showToast('Score rendered successfully!', 'success');
+                showToast(`Score rendered (${currentTimeSignature.num}/${currentTimeSignature.den})`, 'success');
             } catch (err) {
                 showToast('Failed to draw sheet music.', 'error');
                 return; 
             }
             
             if (isFirebaseActive && roomCode) {
-                setTimeout(() => { set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData); }, 500); 
+                setTimeout(() => { 
+                    set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData);
+                    set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
+                }, 500); 
             }
         }
 
