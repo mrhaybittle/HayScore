@@ -288,11 +288,13 @@
         </div>
 
         <header class="bg-zinc-900 border-b border-zinc-800 p-3 flex flex-col lg:flex-row items-center justify-between shadow-md z-10 gap-3 relative">
-            <div class="flex items-center gap-3 w-full lg:w-auto">
+            <div class="flex items-center gap-2 sm:gap-3 w-full lg:w-auto">
                 <button onclick="switchView('home')" class="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
                 
+                <button onclick="openAvatarModal()" id="btn-avatar" class="text-xl bg-zinc-800 hover:bg-zinc-700 w-10 h-10 rounded-lg flex items-center justify-center transition shadow-md border border-zinc-700" title="Choose Avatar">👤</button>
+
                 <div class="flex bg-black border border-zinc-700 rounded-lg overflow-hidden flex-1 sm:flex-none">
                     <input type="text" id="join-code-input" placeholder="WORD" class="bg-transparent text-white placeholder-zinc-600 px-4 py-2 outline-none w-32 font-mono font-bold tracking-widest uppercase text-center" maxlength="5">
                     <button onclick="joinRehearsal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 font-bold transition">Join</button>
@@ -374,6 +376,17 @@
         </div>
     </div>
 
+    <!-- AVATAR MODAL -->
+    <div id="avatar-modal" class="hidden-view fixed inset-0 bg-black/80 flex items-center justify-center z-[150] p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-sm flex flex-col p-6 relative shadow-2xl">
+            <button onclick="closeAvatarModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-xl font-bold mb-4 text-white">Choose Avatar</h2>
+            <div id="avatar-grid" class="grid grid-cols-5 gap-3 text-3xl justify-items-center">
+                <!-- populated by js -->
+            </div>
+        </div>
+    </div>
+
     <!-- GOOGLE DRIVE MODAL -->
     <div id="drive-modal" class="hidden-view fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div class="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-3xl h-[80vh] flex flex-col p-6 relative shadow-2xl">
@@ -395,7 +408,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.9.0 • Updated: 22 Sep 2026, 12:43 AEST (Sydney)</div>
+        <div>v2.10.0 • Updated: 22 Sep 2026, 12:52 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -498,9 +511,10 @@
         let startX, startY;
         let studentAnnotations = [];
 
-        // Student Roster Name
+        // Student Roster Name & Avatar
         let localStudentName = "Student";
         let localStudentId = null;
+        let localStudentAvatar = localStorage.getItem('hayscore_avatar') || "👤";
 
         const SAFE_WORD_CODES = [
             "BAND", "NOTE", "BEAT", "SONG", "TUNE", "DRUM", "HORN", "BASS",
@@ -509,12 +523,49 @@
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
+        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","🦀","🦖","👻","👽","🤖","🤠","🤡"];
+
+        window.openAvatarModal = function() {
+            const grid = document.getElementById('avatar-grid');
+            grid.innerHTML = '';
+            EMOJIS.forEach(emo => {
+                const btn = document.createElement('button');
+                btn.className = `hover:scale-125 transition-transform p-2 flex items-center justify-center ${emo === localStudentAvatar ? 'bg-zinc-800 rounded-lg shadow-[0_0_10px_rgba(255,255,255,0.1)]' : ''}`;
+                btn.innerText = emo;
+                btn.onclick = () => selectAvatar(emo);
+                grid.appendChild(btn);
+            });
+            document.getElementById('avatar-modal').classList.remove('hidden-view');
+        };
+
+        window.selectAvatar = function(emo) {
+            localStudentAvatar = emo;
+            localStorage.setItem('hayscore_avatar', emo);
+            document.getElementById('btn-avatar').innerText = emo;
+            if (isFirebaseActive && roomCode && localStudentId) {
+                set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/avatar`), emo);
+            }
+            closeAvatarModal();
+            showToast('Avatar saved!', 'success');
+        };
+
+        window.closeAvatarModal = function() {
+            document.getElementById('avatar-modal').classList.add('hidden-view');
+        };
+
         // Track visibility for student tab-switching
         document.addEventListener("visibilitychange", () => {
             if (isFirebaseActive && roomCode && localStudentId && currentView === 'student') {
                 const statusRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}/status`);
                 set(statusRef, document.hidden ? "away" : "active");
             }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnAvatar = document.getElementById('btn-avatar');
+            if(btnAvatar) btnAvatar.innerText = localStudentAvatar;
+            setupPinchZoom('osmd-host-wrapper', 'host');
+            setupPinchZoom('osmd-student-wrapper', 'student');
         });
 
         window.toggleTheme = function() {
@@ -760,7 +811,15 @@
                             const isAway = r.status === 'away';
                             const awayIcon = isAway ? `<i class="fa-solid fa-moon text-yellow-500 ml-1" title="Tab in background"></i>` : '';
                             const opacityClass = isAway ? 'opacity-60' : '';
-                            rosterList.innerHTML += `<div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700 ${opacityClass}"><span class="font-bold text-zinc-200">${r.name}${awayIcon}</span><span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span></div>`;
+                            const stuAvatar = r.avatar || '👤';
+                            rosterList.innerHTML += `
+                                <div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700 ${opacityClass}">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-lg">${stuAvatar}</span>
+                                        <span class="font-bold text-zinc-200">${r.name}${awayIcon}</span>
+                                    </div>
+                                    <span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span>
+                                </div>`;
                         });
                     }
                 });
@@ -981,7 +1040,7 @@
                             attachRoomListeners(input, 'student');
                             
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
-                            set(myRosterRef, { name: localStudentName, partName: "", status: "active" });
+                            set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar });
                             onDisconnect(myRosterRef).remove();
                         } else {
                             showToast('Room exists, but host has not loaded music yet.', 'error');
@@ -1391,11 +1450,6 @@
             }, {passive: true});
             wrapper.addEventListener('touchend', (e) => { if(e.touches.length < 2) initialDist = null; });
         }
-        
-        document.addEventListener('DOMContentLoaded', () => {
-            setupPinchZoom('osmd-host-wrapper', 'host');
-            setupPinchZoom('osmd-student-wrapper', 'student');
-        });
 
         // --- DRAWING TOOL ---
         window.toggleDrawMode = function() {
