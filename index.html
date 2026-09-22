@@ -344,9 +344,6 @@
                 </div>
 
                 <div class="flex gap-2">
-                    <button id="btn-tab" onclick="toggleTabMode()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-12 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-bold flex items-center justify-center" title="Toggle TAB Mode">
-                        TAB
-                    </button>
                     <button id="btn-tuner" onclick="toggleTuner()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Tuner">
                         <i class="fa-solid fa-microphone"></i>
                     </button>
@@ -421,7 +418,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.13.0 • Updated: 23 Sep 2026, 09:02 AEST (Sydney)</div>
+        <div>v2.12.0 • Updated: 23 Sep 2026, 07:00 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -462,7 +459,6 @@
         let roomCode = "";
         let currentXmlData = null; 
         let isLightMode = false;
-        let isTabMode = false;
         
         // Rehearsal & Sync States
         let currentMeasureNumber = 1;
@@ -634,154 +630,6 @@
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
         };
-
-        window.toggleTabMode = async function() {
-            const selector = document.getElementById('part-selector');
-            if(!currentXmlData || selector.value === "") {
-                showToast("Please select a part first.", "error");
-                return;
-            }
-            isTabMode = !isTabMode;
-            const btn = document.getElementById('btn-tab');
-            if(isTabMode) {
-                btn.classList.add('bg-red-600', 'border-red-600', 'text-white');
-                btn.classList.remove('bg-zinc-800', 'border-zinc-700', 'text-zinc-300');
-                showToast('Guitar TAB Mode Enabled', 'info');
-            } else {
-                btn.classList.remove('bg-red-600', 'border-red-600', 'text-white');
-                btn.classList.add('bg-zinc-800', 'border-zinc-700', 'text-zinc-300');
-                showToast('Standard Notation Enabled', 'info');
-            }
-            await renderStudentTransposedXml(parseInt(selector.value));
-        };
-
-        function convertToTabXml(xmlString, totalTranspose) {
-            try {
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlString, "text/xml");
-
-                const attributesList = xmlDoc.getElementsByTagName("attributes");
-                for (let i = 0; i < attributesList.length; i++) {
-                    const attrs = attributesList[i];
-                    
-                    let clef = attrs.getElementsByTagName("clef")[0];
-                    if (!clef) {
-                        clef = xmlDoc.createElement("clef");
-                        attrs.appendChild(clef);
-                    }
-                    clef.innerHTML = "<sign>TAB</sign><line>5</line>";
-
-                    let staffDetails = attrs.getElementsByTagName("staff-details")[0];
-                    if (!staffDetails) {
-                        staffDetails = xmlDoc.createElement("staff-details");
-                        attrs.appendChild(staffDetails);
-                    }
-                    let staffLines = staffDetails.getElementsByTagName("staff-lines")[0];
-                    if (!staffLines) {
-                        staffLines = xmlDoc.createElement("staff-lines");
-                        staffDetails.appendChild(staffLines);
-                    }
-                    staffLines.textContent = "6";
-                    
-                    if (staffDetails.getElementsByTagName("staff-tuning").length === 0) {
-                        const tunings = [
-                            { line: 1, step: 'E', octave: 4 },
-                            { line: 2, step: 'B', octave: 3 },
-                            { line: 3, step: 'G', octave: 3 },
-                            { line: 4, step: 'D', octave: 3 },
-                            { line: 5, step: 'A', octave: 2 },
-                            { line: 6, step: 'E', octave: 2 }
-                        ];
-                        tunings.forEach(t => {
-                            const tuning = xmlDoc.createElement("staff-tuning");
-                            tuning.setAttribute("line", t.line);
-                            tuning.innerHTML = `<tuning-step>${t.step}</tuning-step><tuning-octave>${t.octave}</tuning-octave>`;
-                            staffDetails.appendChild(tuning);
-                        });
-                    }
-                }
-
-                const pitchMap = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
-                const stringsMidi = [64, 59, 55, 50, 45, 40]; 
-
-                const notes = xmlDoc.getElementsByTagName("note");
-                for (let i = 0; i < notes.length; i++) {
-                    const note = notes[i];
-                    const pitch = note.getElementsByTagName("pitch")[0];
-                    if (!pitch) continue;
-
-                    const step = pitch.getElementsByTagName("step")[0]?.textContent || 'C';
-                    const alter = parseInt(pitch.getElementsByTagName("alter")[0]?.textContent || "0");
-                    const octave = parseInt(pitch.getElementsByTagName("octave")[0]?.textContent || "4");
-
-                    let midiPitch = (octave + 1) * 12 + pitchMap[step] + alter;
-                    midiPitch += totalTranspose;
-
-                    let stringNum = 6;
-                    let fretNum = 0;
-                    let found = false;
-
-                    // Prefer frets 0-12
-                    for (let s = 0; s < 6; s++) {
-                        const diff = midiPitch - stringsMidi[s];
-                        if (diff >= 0 && diff <= 12) {
-                            stringNum = s + 1;
-                            fretNum = diff;
-                            found = true;
-                            break;
-                        }
-                    }
-                    
-                    // Fallback higher frets
-                    if (!found) {
-                        for (let s = 0; s < 6; s++) {
-                            const diff = midiPitch - stringsMidi[s];
-                            if (diff >= 0 && diff <= 24) { 
-                                stringNum = s + 1;
-                                fretNum = diff;
-                                found = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Force out of range calculation to highest or lowest string available
-                    if (!found) {
-                        if (midiPitch < stringsMidi[5]) { stringNum = 6; fretNum = midiPitch - stringsMidi[5]; } 
-                        else { stringNum = 1; fretNum = midiPitch - stringsMidi[0]; }
-                    }
-
-                    let notations = note.getElementsByTagName("notations")[0];
-                    if (!notations) {
-                        notations = xmlDoc.createElement("notations");
-                        note.appendChild(notations);
-                    }
-                    let technical = notations.getElementsByTagName("technical")[0];
-                    if (!technical) {
-                        technical = xmlDoc.createElement("technical");
-                        notations.appendChild(technical);
-                    }
-                    
-                    const existingString = technical.getElementsByTagName("string");
-                    while(existingString.length > 0) existingString[0].parentNode.removeChild(existingString[0]);
-                    const existingFret = technical.getElementsByTagName("fret");
-                    while(existingFret.length > 0) existingFret[0].parentNode.removeChild(existingFret[0]);
-
-                    const strEl = xmlDoc.createElement("string");
-                    strEl.textContent = stringNum.toString();
-                    const fretEl = xmlDoc.createElement("fret");
-                    fretEl.textContent = fretNum.toString();
-
-                    technical.appendChild(strEl);
-                    technical.appendChild(fretEl);
-                }
-
-                return new XMLSerializer().serializeToString(xmlDoc);
-            } catch(e) {
-                console.warn("TAB Conversion Error", e);
-                return xmlString; 
-            }
-        }
 
         window.toggleRoster = function() {
             const sidebar = document.getElementById('host-roster-sidebar');
@@ -1114,7 +962,6 @@
             metronomeActive = false;
             playbackActive = false;
             totalMeasuresCache = 0;
-            isTabMode = false;
             clearInterval(metroInterval);
             clearInterval(playInterval);
             
@@ -1133,12 +980,6 @@
             document.getElementById('student-zoom-slider').value = 1.0;
             hostZoom = 1.0;
             studentZoom = 1.0;
-
-            const btnTab = document.getElementById('btn-tab');
-            if (btnTab) {
-                btnTab.classList.remove('bg-red-600', 'border-red-600', 'text-white');
-                btnTab.classList.add('bg-zinc-800', 'border-zinc-700', 'text-zinc-300');
-            }
 
             document.getElementById('drop-zone').classList.remove('hidden-view');
             document.getElementById('osmd-host-wrapper').classList.add('hidden-view');
@@ -1574,12 +1415,8 @@
                 defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
             });
 
-            // 2. Load the raw XML or TAB transformed XML
-            let loadXml = currentXmlData;
-            if (isTabMode) {
-                loadXml = convertToTabXml(currentXmlData, totalTranspose);
-            }
-            await osmdStudent.load(loadXml);
+            // 2. Load the raw XML
+            await osmdStudent.load(currentXmlData);
 
             // 3. Initialize Transpose Calculator if needed
             if (!osmdStudent.TransposeCalculator && window.opensheetmusicdisplay && window.opensheetmusicdisplay.TransposeCalculator) {
