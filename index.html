@@ -83,6 +83,7 @@
         body.light-mode select {
             background-color: #ffffff !important;
             color: #09090b !important;
+            border-color: #d4d4d8 !important;
         }
         body.light-mode select option {
             background-color: #ffffff !important;
@@ -91,6 +92,10 @@
         body.light-mode header button.bg-zinc-800 {
             background-color: #ffffff !important;
             border-color: #d4d4d8 !important;
+            color: #09090b !important;
+        }
+        body.light-mode header button.bg-zinc-800 i {
+            color: #52525b !important;
         }
         body.light-mode header button.bg-zinc-800:hover {
             background-color: #f4f4f5 !important;
@@ -164,6 +169,11 @@
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100 hidden lg:block">Conductor</h2>
+                
+                <div class="hidden md:flex items-center gap-2 bg-black px-3 py-1.5 rounded-lg border border-zinc-700 ml-2">
+                    <i class="fa-solid fa-magnifying-glass text-zinc-500 text-xs"></i>
+                    <input type="range" id="host-zoom-slider" min="0.3" max="2.5" step="0.1" value="1.0" class="w-20" onchange="changeZoom(this.value, 'host')">
+                </div>
             </div>
 
             <div class="absolute left-1/2 transform -translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md">
@@ -194,6 +204,15 @@
                 <button id="btn-focus" onclick="toggleFocusMode()" class="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-500 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Blur student screens">
                     <i class="fa-solid fa-eye"></i> <span class="hidden xl:inline">Eyes on Me</span>
                 </button>
+
+                <!-- Broadcast Control -->
+                <div class="hidden md:flex items-center gap-1 bg-black px-2 py-1.5 rounded-lg border border-zinc-700 shadow-inner">
+                    <i class="fa-solid fa-bullhorn text-zinc-500 mx-1"></i>
+                    <input type="text" id="broadcast-input" placeholder="Broadcast..." class="bg-transparent text-white w-24 text-sm outline-none" maxlength="40">
+                    <button onclick="sendBroadcast()" class="w-7 h-7 rounded bg-blue-600/20 text-blue-500 hover:bg-blue-600 flex items-center justify-center transition hover:text-white" title="Send Message to All">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
 
                 <button onclick="toggleRoster()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="View Roster">
                     <i class="fa-solid fa-list-ul"></i>
@@ -252,6 +271,22 @@
             <p class="text-zinc-400 mt-4 text-xl font-medium">Please stop playing and look up.</p>
         </div>
 
+        <!-- Broadcast Overlay -->
+        <div id="broadcast-overlay" class="hidden-view absolute inset-0 z-[110] backdrop-blur-xl bg-blue-900/80 flex flex-col items-center justify-center transition-all duration-300">
+            <i class="fa-solid fa-bullhorn text-7xl text-blue-300 mb-6 animate-bounce drop-shadow-lg"></i>
+            <h2 id="broadcast-text" class="text-6xl sm:text-7xl font-black text-white tracking-wide shadow-black drop-shadow-2xl text-center px-4 leading-tight uppercase">MESSAGE</h2>
+        </div>
+
+        <!-- Built-in Tuner Overlay -->
+        <div id="tuner-overlay" class="hidden-view absolute top-20 right-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-xl p-4 z-[60] flex flex-col items-center min-w-[120px] transition-all cursor-move">
+            <div class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Tuner</div>
+            <div id="tuner-note" class="text-4xl font-black text-red-500 mb-1">-</div>
+            <div id="tuner-cents" class="text-sm font-medium text-zinc-300">0</div>
+            <div class="w-full bg-zinc-800 h-2 rounded-full mt-2 relative overflow-hidden">
+                <div id="tuner-indicator" class="absolute top-0 bottom-0 w-1 bg-red-500 left-1/2 transform -translate-x-1/2 transition-all duration-75"></div>
+            </div>
+        </div>
+
         <header class="bg-zinc-900 border-b border-zinc-800 p-3 flex flex-col lg:flex-row items-center justify-between shadow-md z-10 gap-3 relative">
             <div class="flex items-center gap-3 w-full lg:w-auto">
                 <button onclick="switchView('home')" class="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition">
@@ -300,15 +335,23 @@
                 </div>
 
                 <div class="flex gap-2">
-                    <button onclick="toggleTheme()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium" title="Toggle Theme">
+                    <button id="btn-tuner" onclick="toggleTuner()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Tuner">
+                        <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <button onclick="toggleTheme()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Theme">
                         <i class="fa-solid fa-sun theme-toggle-icon"></i>
                     </button>
-                    <button id="btn-draw" onclick="toggleDrawMode()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium" title="Draw Annotations">
+                    <button id="btn-draw" onclick="toggleDrawMode()" class="bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Draw Annotations">
                         <i class="fa-solid fa-highlighter"></i>
                     </button>
-                    <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium" title="Toggle Auto-Scroll">
+                    <button id="btn-autoscroll" onclick="toggleAutoScroll()" class="bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium flex items-center justify-center" title="Toggle Auto-Scroll">
                         <i class="fa-solid fa-angles-down"></i>
                     </button>
+                </div>
+
+                <div class="hidden md:flex items-center gap-2 bg-black px-2 py-1 rounded-lg border border-zinc-700">
+                    <i class="fa-solid fa-magnifying-glass text-zinc-500 text-[10px]"></i>
+                    <input type="range" id="student-zoom-slider" min="0.3" max="2.5" step="0.1" value="1.0" class="w-16 h-1" onchange="changeZoom(this.value, 'student')">
                 </div>
             </div>
         </header>
@@ -325,7 +368,7 @@
             </div>
         </div>
         
-        <div id="osmd-student-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-6 bg-zinc-950">
+        <div id="osmd-student-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-6 touch-pan-x touch-pan-y bg-zinc-950">
             <div id="student-highlight-box" class="measure-highlight-box hidden-view"></div>
             <div id="osmd-student-container" class="w-full min-h-full relative select-none"></div>
         </div>
@@ -345,8 +388,14 @@
     </div>
 
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
-        <div>HaySync App</div>
-        <div>v2.6.6 • Updated: 22 Sep 2026, 11:32 AEST (Sydney)</div>
+        <div class="flex items-center gap-3 flex-1">
+            <span>HaySync App</span>
+            <div class="flex-1 max-w-xs h-1.5 bg-zinc-800 rounded-full overflow-hidden relative">
+                <div id="measure-progress-bar" class="absolute top-0 left-0 h-full bg-red-600 transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
+        </div>
+        <div>v2.8.0 • Updated: 22 Sep 2026, 12:02 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -393,6 +442,7 @@
         let autoScrollEnabled = true;
         let currentStudentTranspose = 0; // Octaves
         let currentStudentKeyTranspose = 0; // Semitones for Instrument Key
+        let totalMeasuresCache = 0;
         
         let hostRehearsalMarks = {}; 
         let hostRepeatMarks = []; 
@@ -404,6 +454,17 @@
         let bpm = 100;
         let playInterval = null;
         let metroInterval = null;
+
+        // Zoom 
+        let hostZoom = 1.0;
+        let studentZoom = 1.0;
+
+        // Tuner
+        let tunerActive = false;
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let tunerRafId = null;
 
         // Web Audio Context for Metronome Click
         let audioCtx = null;
@@ -621,7 +682,28 @@
                 dot.style.opacity = '1';
                 setTimeout(() => { dot.style.opacity = '0'; }, 100); 
             }
-            playMetronomeClick(); // Play synchronized click sound
+            if (currentView === 'host') {
+                playMetronomeClick(); // Play synchronized click sound only for host
+            }
+        }
+
+        window.sendBroadcast = function() {
+            const input = document.getElementById('broadcast-input');
+            const msg = input.value.trim();
+            if (!msg || !isFirebaseActive || !roomCode) return;
+            
+            set(ref(db, `rooms/${roomCode}/broadcast`), { text: msg, timestamp: Date.now() });
+            input.value = '';
+            showToast('Message broadcasted to students!', 'success');
+        };
+
+        function updateProgressUI() {
+            if(totalMeasuresCache <= 0) return;
+            const pct = Math.min(100, Math.round((currentMeasureNumber / totalMeasuresCache) * 100));
+            const bar = document.getElementById('measure-progress-bar');
+            const text = document.getElementById('measure-progress-text');
+            if(bar) bar.style.width = `${pct}%`;
+            if(text) text.innerText = `Bar ${currentMeasureNumber} of ${totalMeasuresCache} • ${pct}%`;
         }
 
         function attachRoomListeners(code, role) {
@@ -638,6 +720,24 @@
                     const overlay = document.getElementById('focus-overlay');
                     if(isFocus) overlay.classList.remove('hidden-view');
                     else overlay.classList.add('hidden-view');
+                });
+
+                let lastBroadcastTime = 0;
+                onValue(ref(db, `rooms/${code}/broadcast`), (snap) => {
+                    const data = snap.val();
+                    if(data && data.text && data.timestamp > lastBroadcastTime) {
+                        if (Date.now() - data.timestamp < 10000) { // Only show if recent
+                            lastBroadcastTime = data.timestamp;
+                            const overlay = document.getElementById('broadcast-overlay');
+                            document.getElementById('broadcast-text').innerText = data.text;
+                            overlay.classList.remove('hidden-view');
+                            setTimeout(() => {
+                                overlay.classList.add('hidden-view');
+                            }, 2000); // Disappear after 2 seconds
+                        } else {
+                            lastBroadcastTime = data.timestamp; 
+                        }
+                    }
                 });
             } else if (role === 'host') {
                 onValue(ref(db, `rooms/${code}/roster`), (snap) => {
@@ -738,8 +838,11 @@
             focusActive = false;
             metronomeActive = false;
             playbackActive = false;
+            totalMeasuresCache = 0;
             clearInterval(metroInterval);
             clearInterval(playInterval);
+            
+            if(tunerActive) toggleTuner();
 
             // Reset Host Controls
             document.getElementById('btn-focus').classList.remove('bg-red-600', 'text-white', 'border-red-500');
@@ -749,6 +852,11 @@
             document.getElementById('btn-play').classList.remove('bg-red-600', 'text-white');
             document.getElementById('btn-play').classList.add('bg-green-600/20', 'text-green-500');
             document.getElementById('btn-play').innerHTML = '<i class="fa-solid fa-play"></i>';
+            document.getElementById('broadcast-input').value = "";
+            document.getElementById('host-zoom-slider').value = 1.0;
+            document.getElementById('student-zoom-slider').value = 1.0;
+            hostZoom = 1.0;
+            studentZoom = 1.0;
 
             document.getElementById('drop-zone').classList.remove('hidden-view');
             document.getElementById('osmd-host-wrapper').classList.add('hidden-view');
@@ -766,6 +874,7 @@
             }
 
             document.getElementById('focus-overlay').classList.add('hidden-view');
+            document.getElementById('broadcast-overlay').classList.add('hidden-view');
             document.getElementById('student-placeholder').classList.remove('hidden-view');
             document.getElementById('osmd-student-wrapper').classList.add('hidden-view');
             document.getElementById('student-bar-display').innerText = "Bar: 1";
@@ -777,6 +886,9 @@
             selector.innerHTML = '<option value="" disabled selected>Select Part...</option>';
             selector.classList.remove('bg-red-600', 'border-red-400', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
             selector.classList.add('bg-zinc-800', 'border-zinc-700');
+            
+            document.getElementById('measure-progress-bar').style.width = '0%';
+            document.getElementById('measure-progress-text').innerText = 'Bar 0 of 0 • 0%';
 
             if (osmdStudent) {
                 document.getElementById('osmd-student-container').innerHTML = ""; 
@@ -969,9 +1081,14 @@
                 document.getElementById('osmd-host-wrapper').classList.remove('hidden-view');
                 
                 await osmdHost.load(currentXmlData);
+                osmdHost.zoom = hostZoom;
                 osmdHost.render();
+                totalMeasuresCache = osmdHost.graphic.measureList.length;
                 
-                setTimeout(() => { highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); }, 200);
+                setTimeout(() => { 
+                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); 
+                    updateProgressUI();
+                }, 200);
                 showToast('Score rendered successfully!', 'success');
             } catch (err) {
                 showToast('Failed to draw sheet music.', 'error');
@@ -1008,7 +1125,7 @@
                         const size = stave.PositionAndShape.Size;
                         if (pos && size) {
                             validCount++;
-                            const x = pos.x * 10, y = pos.y * 10, w = size.width * 10, h = size.height * 10;
+                            const x = pos.x * 10 * osmdInstance.zoom, y = pos.y * 10 * osmdInstance.zoom, w = size.width * 10 * osmdInstance.zoom, h = size.height * 10 * osmdInstance.zoom;
                             if (x < minX) minX = x;
                             if (y < minY) minY = y;
                             if ((x + w) > maxX) maxX = x + w;
@@ -1079,6 +1196,7 @@
             
             currentMeasureNumber = targetMeasure;
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
+            updateProgressUI();
             
             if (isFirebaseActive && roomCode) {
                 set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
@@ -1180,10 +1298,16 @@
             }
             
             // 7. Draw it to the screen
+            osmdStudent.zoom = studentZoom;
             osmdStudent.render();
             
+            totalMeasuresCache = osmdStudent.graphic.measureList.length;
+
             loadAnnotations();
-            setTimeout(() => syncToMeasure(currentMeasureNumber), 200);
+            setTimeout(() => {
+                syncToMeasure(currentMeasureNumber);
+                updateProgressUI();
+            }, 200);
             showToast('Ready to play.', 'success');
         }
 
@@ -1191,6 +1315,7 @@
             currentMeasureNumber = measureNumber;
             if (!osmdStudent || !osmdStudent.graphic) return;
             highlightMeasure(osmdStudent, 'student-highlight-box', measureNumber, 'osmd-student-wrapper');
+            updateProgressUI();
         }
 
         window.toggleAutoScroll = function() {
@@ -1207,6 +1332,61 @@
             }
         };
 
+        // --- ZOOM & PINCH GESTURES ---
+        window.changeZoom = function(val, role) {
+            if(role === 'host' && osmdHost) {
+                hostZoom = parseFloat(val); 
+                osmdHost.zoom = hostZoom; 
+                osmdHost.render();
+                highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
+            }
+            if(role === 'student' && osmdStudent) {
+                studentZoom = parseFloat(val); 
+                osmdStudent.zoom = studentZoom; 
+                osmdStudent.render();
+                loadAnnotations();
+                highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
+            }
+        }
+
+        function setupPinchZoom(wrapperId, role) {
+            const wrapper = document.getElementById(wrapperId);
+            if(!wrapper) return;
+            let initialDist = null;
+            let initialZoom = 1.0;
+            wrapper.addEventListener('touchstart', (e) => {
+                if(e.touches.length === 2) {
+                    initialDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    initialZoom = role === 'host' ? hostZoom : studentZoom;
+                }
+            }, {passive: true});
+            wrapper.addEventListener('touchmove', (e) => {
+                if(e.touches.length === 2 && initialDist) {
+                    let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    let scale = currentDist / initialDist;
+                    let newZoom = Math.max(0.3, Math.min(2.5, initialZoom * scale));
+                    
+                    if(role === 'host') {
+                        const slider = document.getElementById('host-zoom-slider');
+                        if (slider) slider.value = newZoom;
+                    }
+                    if(role === 'student') {
+                        const slider = document.getElementById('student-zoom-slider');
+                        if (slider) slider.value = newZoom;
+                    }
+                    
+                    changeZoom(newZoom, role);
+                }
+            }, {passive: true});
+            wrapper.addEventListener('touchend', (e) => { if(e.touches.length < 2) initialDist = null; });
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            setupPinchZoom('osmd-host-wrapper', 'host');
+            setupPinchZoom('osmd-student-wrapper', 'student');
+        });
+
+        // --- DRAWING TOOL ---
         window.toggleDrawMode = function() {
             isDrawMode = !isDrawMode;
             const btn = document.getElementById('btn-draw');
@@ -1304,6 +1484,79 @@
             } else {
                 studentAnnotations = [];
             }
+        }
+
+        // --- BUILT-IN TUNER ---
+        window.toggleTuner = async function() {
+            tunerActive = !tunerActive;
+            const btn = document.getElementById('btn-tuner');
+            const overlay = document.getElementById('tuner-overlay');
+            if(tunerActive) {
+                btn.className = "bg-red-600 border border-red-600 text-white w-10 py-2 rounded-lg hover:bg-red-700 transition shadow-lg text-sm font-medium flex items-center justify-center";
+                overlay.classList.remove('hidden-view');
+                try {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 2048;
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    microphone.connect(analyser);
+                    updatePitch();
+                } catch(e) { showToast('Mic access denied.', 'error'); toggleTuner(); }
+            } else {
+                btn.className = "bg-zinc-800 text-zinc-300 border border-zinc-700 w-10 py-2 rounded-lg hover:bg-zinc-700 transition shadow-lg text-sm font-medium flex items-center justify-center";
+                overlay.classList.add('hidden-view');
+                cancelAnimationFrame(tunerRafId);
+                if(audioContext) { audioContext.close(); audioContext = null; }
+            }
+        };
+
+        const noteStrings = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+        function updatePitch() {
+            const buffer = new Float32Array(analyser.fftSize);
+            analyser.getFloatTimeDomainData(buffer);
+            const pitch = autoCorrelate(buffer, audioContext.sampleRate);
+            
+            if (pitch !== -1) {
+                const noteNum = Math.round(12 * (Math.log(pitch / 440) / Math.log(2))) + 69;
+                const freq = 440 * Math.pow(2, (noteNum - 69) / 12);
+                const cents = Math.floor((1200 * Math.log(pitch / freq)) / Math.log(2));
+                
+                document.getElementById('tuner-note').innerText = noteStrings[noteNum % 12];
+                document.getElementById('tuner-cents').innerText = `${cents > 0 ? '+' : ''}${cents} ¢`;
+                
+                const indicator = document.getElementById('tuner-indicator');
+                const offset = Math.max(-50, Math.min(50, cents));
+                indicator.style.left = `calc(50% + ${offset}%)`;
+                indicator.style.backgroundColor = Math.abs(cents) < 10 ? '#22c55e' : '#ef4444';
+            }
+            if (!window.requestAnimationFrame) window.requestAnimationFrame = window.webkitRequestAnimationFrame;
+            tunerRafId = window.requestAnimationFrame(updatePitch);
+        }
+
+        function autoCorrelate(buf, sampleRate) {
+            let SIZE = buf.length;
+            let rms = 0;
+            for (let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
+            rms = Math.sqrt(rms/SIZE);
+            if (rms<0.01) return -1;
+            
+            let r1=0, r2=SIZE-1, thres=0.2;
+            for (let i=0; i<SIZE/2; i++) if (Math.abs(buf[i])<thres) { r1=i; break; }
+            for (let i=1; i<SIZE/2; i++) if (Math.abs(buf[SIZE-i])<thres) { r2=SIZE-i; break; }
+            
+            buf = buf.slice(r1,r2);
+            SIZE = buf.length;
+            let c = new Array(SIZE).fill(0);
+            for (let i=0; i<SIZE; i++) for (let j=0; j<SIZE-i; j++) c[i] = c[i] + buf[j]*buf[j+i];
+            
+            let d=0; while (c[d]>c[d+1]) d++;
+            let maxval=-1, maxpos=-1;
+            for (let i=d; i<SIZE; i++) {
+                if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+            }
+            let T0 = maxpos;
+            return sampleRate/T0;
         }
     </script>
 </body>
