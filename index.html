@@ -74,7 +74,8 @@
         body.light-mode header .bg-black,
         body.light-mode header .bg-zinc-800,
         body.light-mode header .bg-zinc-950,
-        body.light-mode header .bg-zinc-900 {
+        body.light-mode header .bg-zinc-900,
+        body.light-mode #host-roster-sidebar {
             background-color: #ffffff !important;
             border-color: #d4d4d8 !important;
         }
@@ -194,14 +195,9 @@
                     <i class="fa-solid fa-eye"></i> <span class="hidden xl:inline">Eyes on Me</span>
                 </button>
 
-                <!-- Broadcast Control -->
-                <div class="hidden md:flex items-center gap-1 bg-black px-2 py-1.5 rounded-lg border border-zinc-700 shadow-inner">
-                    <i class="fa-solid fa-bullhorn text-zinc-500 mx-1"></i>
-                    <input type="text" id="broadcast-input" placeholder="Broadcast..." class="bg-transparent text-white w-24 text-sm outline-none" maxlength="40">
-                    <button onclick="sendBroadcast()" class="w-7 h-7 rounded bg-blue-600/20 text-blue-500 hover:bg-blue-600 flex items-center justify-center transition hover:text-white" title="Send Message to All">
-                        <i class="fa-solid fa-paper-plane"></i>
-                    </button>
-                </div>
+                <button onclick="toggleRoster()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="View Roster">
+                    <i class="fa-solid fa-list-ul"></i>
+                </button>
                 
                 <div class="bg-black px-3 py-1.5 rounded-lg border border-red-900/50 shadow-inner">
                     <span class="text-zinc-500 text-xs uppercase tracking-wider mr-1 hidden sm:inline">CODE:</span>
@@ -227,9 +223,22 @@
             </div>
         </div>
 
-        <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
-            <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
-            <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
+        <div class="flex flex-1 relative overflow-hidden bg-zinc-950">
+            <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 touch-pan-x touch-pan-y bg-zinc-950">
+                <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
+                <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
+            </div>
+
+            <!-- HOST ROSTER SIDEBAR -->
+            <div id="host-roster-sidebar" class="hidden-view w-64 bg-zinc-900 border-l border-zinc-800 flex flex-col h-full shadow-xl z-20">
+                <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-black/20">
+                    <h3 class="font-bold text-zinc-100"><i class="fa-solid fa-users mr-2 text-red-500"></i> Live Roster</h3>
+                    <span id="roster-count" class="text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400">0</span>
+                </div>
+                <div id="roster-list" class="flex-1 overflow-auto p-2 space-y-1 osmd-scroll">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
         </div>
     </div>
 
@@ -241,22 +250,6 @@
             <i class="fa-solid fa-eye text-9xl text-red-600 mb-8 animate-pulse drop-shadow-[0_0_25px_rgba(220,38,38,0.8)]"></i>
             <h2 class="text-5xl sm:text-6xl font-black text-white tracking-widest uppercase shadow-black drop-shadow-2xl text-center px-4">Eyes on Conductor</h2>
             <p class="text-zinc-400 mt-4 text-xl font-medium">Please stop playing and look up.</p>
-        </div>
-
-        <!-- Broadcast Overlay -->
-        <div id="broadcast-overlay" class="hidden-view absolute inset-0 z-[110] backdrop-blur-xl bg-blue-900/80 flex flex-col items-center justify-center transition-all duration-300">
-            <i class="fa-solid fa-bullhorn text-7xl text-blue-300 mb-6 animate-bounce drop-shadow-lg"></i>
-            <h2 id="broadcast-text" class="text-6xl sm:text-7xl font-black text-white tracking-wide shadow-black drop-shadow-2xl text-center px-4 leading-tight uppercase">MESSAGE</h2>
-        </div>
-
-        <!-- Built-in Tuner Overlay -->
-        <div id="tuner-overlay" class="hidden-view absolute top-20 right-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-xl p-4 z-[60] flex flex-col items-center min-w-[120px] transition-all cursor-move">
-            <div class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Tuner</div>
-            <div id="tuner-note" class="text-4xl font-black text-red-500 mb-1">-</div>
-            <div id="tuner-cents" class="text-sm font-medium text-zinc-300">0</div>
-            <div class="w-full bg-zinc-800 h-2 rounded-full mt-2 relative overflow-hidden">
-                <div id="tuner-indicator" class="absolute top-0 bottom-0 w-1 bg-red-500 left-1/2 transform -translate-x-1/2 transition-all duration-75"></div>
-            </div>
         </div>
 
         <header class="bg-zinc-900 border-b border-zinc-800 p-3 flex flex-col lg:flex-row items-center justify-between shadow-md z-10 gap-3 relative">
@@ -352,14 +345,8 @@
     </div>
 
     <footer class="fixed bottom-0 left-0 right-0 h-6 bg-zinc-900 border-t border-zinc-800 px-4 flex items-center justify-between text-[11px] text-zinc-500 font-mono z-50 pointer-events-none">
-        <div class="flex items-center gap-3 flex-1">
-            <span>HaySync App</span>
-            <div class="flex-1 max-w-xs h-1.5 bg-zinc-800 rounded-full overflow-hidden relative">
-                <div id="measure-progress-bar" class="absolute top-0 left-0 h-full bg-red-600 transition-all duration-300" style="width: 0%"></div>
-            </div>
-            <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
-        </div>
-        <div>v2.6.6 • Updated: 22 Sep 2026, 11:26 AEST (Sydney)</div>
+        <div>HaySync App</div>
+        <div>v2.6.6 • Updated: 22 Sep 2026, 11:32 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -450,6 +437,10 @@
         let startX, startY;
         let studentAnnotations = [];
 
+        // Student Roster Name
+        let localStudentName = "Student";
+        let localStudentId = null;
+
         const SAFE_WORD_CODES = [
             "BAND", "NOTE", "BEAT", "SONG", "TUNE", "DRUM", "HORN", "BASS",
             "CLEF", "PLAY", "REST", "JAZZ", "SING", "ROCK", "OBOE", "LUTE",
@@ -489,6 +480,11 @@
                 loadAnnotations();
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
+        };
+
+        window.toggleRoster = function() {
+            const sidebar = document.getElementById('host-roster-sidebar');
+            if(sidebar) sidebar.classList.toggle('hidden-view');
         };
 
         window.fetchDriveFiles = async function(folderId = null, folderName = null) {
@@ -628,16 +624,6 @@
             playMetronomeClick(); // Play synchronized click sound
         }
 
-        window.sendBroadcast = function() {
-            const input = document.getElementById('broadcast-input');
-            const msg = input.value.trim();
-            if (!msg || !isFirebaseActive || !roomCode) return;
-            
-            set(ref(db, `rooms/${roomCode}/broadcast`), { text: msg, timestamp: Date.now() });
-            input.value = '';
-            showToast('Message broadcasted to students!', 'success');
-        };
-
         function attachRoomListeners(code, role) {
             const dotId = role === 'host' ? 'metro-dot-host' : 'metro-dot-student';
             
@@ -653,22 +639,18 @@
                     if(isFocus) overlay.classList.remove('hidden-view');
                     else overlay.classList.add('hidden-view');
                 });
-
-                let lastBroadcastTime = 0;
-                onValue(ref(db, `rooms/${code}/broadcast`), (snap) => {
-                    const data = snap.val();
-                    if(data && data.text && data.timestamp > lastBroadcastTime) {
-                        if (Date.now() - data.timestamp < 10000) {
-                            lastBroadcastTime = data.timestamp;
-                            const overlay = document.getElementById('broadcast-overlay');
-                            document.getElementById('broadcast-text').innerText = data.text;
-                            overlay.classList.remove('hidden-view');
-                            setTimeout(() => {
-                                overlay.classList.add('hidden-view');
-                            }, 2000);
-                        } else {
-                            lastBroadcastTime = data.timestamp; 
-                        }
+            } else if (role === 'host') {
+                onValue(ref(db, `rooms/${code}/roster`), (snap) => {
+                    const rosterData = snap.val() || {};
+                    const rosterList = document.getElementById('roster-list');
+                    if(rosterList) {
+                        rosterList.innerHTML = '';
+                        const keys = Object.keys(rosterData);
+                        document.getElementById('roster-count').innerText = keys.length;
+                        keys.forEach(k => {
+                            const r = rosterData[k];
+                            rosterList.innerHTML += `<div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700"><span class="font-bold text-zinc-200">${r.name}</span><span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span></div>`;
+                        });
                     }
                 });
             }
@@ -741,6 +723,10 @@
         };
 
         function resetSession() {
+            if(isFirebaseActive && roomCode && localStudentId) {
+                remove(ref(db, `rooms/${roomCode}/roster/${localStudentId}`));
+            }
+
             roomCode = "";
             currentXmlData = null;
             currentMeasureNumber = 1;
@@ -763,10 +749,13 @@
             document.getElementById('btn-play').classList.remove('bg-red-600', 'text-white');
             document.getElementById('btn-play').classList.add('bg-green-600/20', 'text-green-500');
             document.getElementById('btn-play').innerHTML = '<i class="fa-solid fa-play"></i>';
-            document.getElementById('broadcast-input').value = "";
 
             document.getElementById('drop-zone').classList.remove('hidden-view');
             document.getElementById('osmd-host-wrapper').classList.add('hidden-view');
+            
+            const sidebar = document.getElementById('host-roster-sidebar');
+            if(sidebar) sidebar.classList.add('hidden-view');
+            
             document.getElementById('host-bar-display').innerText = "Bar: 1";
             document.getElementById('host-room-code').innerText = "----";
             document.getElementById('file-input').value = ""; 
@@ -777,7 +766,6 @@
             }
 
             document.getElementById('focus-overlay').classList.add('hidden-view');
-            document.getElementById('broadcast-overlay').classList.add('hidden-view');
             document.getElementById('student-placeholder').classList.remove('hidden-view');
             document.getElementById('osmd-student-wrapper').classList.add('hidden-view');
             document.getElementById('student-bar-display').innerText = "Bar: 1";
@@ -841,6 +829,9 @@
                 return;
             }
             
+            localStudentName = prompt("Enter your name for the roster:") || "Student";
+            localStudentId = "stu_" + Math.random().toString(36).substr(2, 9);
+            
             showToast(`Connecting to ${input}...`, 'info');
             
             if (isFirebaseActive) {
@@ -865,6 +856,10 @@
                             populateStudentParts(currentXmlData);
                             
                             attachRoomListeners(input, 'student');
+                            
+                            const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
+                            set(myRosterRef, { name: localStudentName, partName: "" });
+                            onDisconnect(myRosterRef).remove();
                         } else {
                             showToast('Room exists, but host has not loaded music yet.', 'error');
                         }
@@ -1116,6 +1111,11 @@
             const selector = document.getElementById('part-selector');
             selector.classList.remove('bg-red-600', 'border-red-400', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
             selector.classList.add('bg-zinc-800', 'border-zinc-700');
+
+            const partName = selector.options[selector.selectedIndex].text;
+            if(isFirebaseActive && roomCode && localStudentId) {
+                set(ref(db, `rooms/${roomCode}/roster/${localStudentId}/partName`), partName);
+            }
             
             showToast('Loading your part...', 'info');
             document.getElementById('student-placeholder').classList.add('hidden-view');
