@@ -395,7 +395,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.8.0 • Updated: 22 Sep 2026, 12:02 AEST (Sydney)</div>
+        <div>v2.9.0 • Updated: 22 Sep 2026, 12:43 AEST (Sydney)</div>
     </footer>
 
     <script type="module">
@@ -508,6 +508,14 @@
             "REED", "KEYS", "TRIO", "SOLO", "DUET", "FAST", "SLOW", "LOUD",
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
+
+        // Track visibility for student tab-switching
+        document.addEventListener("visibilitychange", () => {
+            if (isFirebaseActive && roomCode && localStudentId && currentView === 'student') {
+                const statusRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}/status`);
+                set(statusRef, document.hidden ? "away" : "active");
+            }
+        });
 
         window.toggleTheme = function() {
             isLightMode = !isLightMode;
@@ -749,7 +757,10 @@
                         document.getElementById('roster-count').innerText = keys.length;
                         keys.forEach(k => {
                             const r = rosterData[k];
-                            rosterList.innerHTML += `<div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700"><span class="font-bold text-zinc-200">${r.name}</span><span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span></div>`;
+                            const isAway = r.status === 'away';
+                            const awayIcon = isAway ? `<i class="fa-solid fa-moon text-yellow-500 ml-1" title="Tab in background"></i>` : '';
+                            const opacityClass = isAway ? 'opacity-60' : '';
+                            rosterList.innerHTML += `<div class="bg-zinc-800 p-2 rounded flex justify-between items-center text-sm border border-zinc-700 ${opacityClass}"><span class="font-bold text-zinc-200">${r.name}${awayIcon}</span><span class="text-red-400 text-xs">${r.partName || 'Selecting...'}</span></div>`;
                         });
                     }
                 });
@@ -970,7 +981,7 @@
                             attachRoomListeners(input, 'student');
                             
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
-                            set(myRosterRef, { name: localStudentName, partName: "" });
+                            set(myRosterRef, { name: localStudentName, partName: "", status: "active" });
                             onDisconnect(myRosterRef).remove();
                         } else {
                             showToast('Room exists, but host has not loaded music yet.', 'error');
