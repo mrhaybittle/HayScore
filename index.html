@@ -456,7 +456,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.15.0 • Live Mixer Engine</div>
+        <div>v2.16.0 • Auto-Mute Transposed Parts</div>
     </footer>
 
     <script type="module">
@@ -613,6 +613,39 @@
             }
 
             schedulerTimerId = setTimeout(schedulerLoop, 25);
+        }
+
+        // --- TRANSPOSED INSTRUMENT DETECTION HELPER ---
+        function checkIsTransposedInstrument(name, partId, xmlDoc) {
+            const n = (name || "").toLowerCase();
+            
+            // Standard transposing instruments (winds/brass in Bb, Eb, F, A, etc.)
+            const transposingKeywords = [
+                'trumpet', 'cornet', 'flugel', 'fluegel', 'clarinet', 'sax', 'saxophone',
+                'horn', 'cor anglais', 'mellophone', 'alto flute'
+            ];
+            if (transposingKeywords.some(kw => n.includes(kw))) return true;
+
+            // Transposed key indicators in part names (e.g., "Bb", "Eb", "in F", "in A", "in Bb", "(Bb)")
+            if (/\b(bb|eb)\b/i.test(n) || /\bin\s+[a-g][b#]?\b/i.test(n) || /\([a-g][b#]?\)/i.test(n)) {
+                return true;
+            }
+
+            // Inspect MusicXML <transpose> element if present in XML attributes
+            if (xmlDoc && partId) {
+                try {
+                    const partNode = xmlDoc.querySelector(`part[id="${partId}"]`);
+                    if (partNode) {
+                        const transposeNode = partNode.querySelector("transpose");
+                        if (transposeNode) {
+                            const chromatic = parseInt(transposeNode.querySelector("chromatic")?.textContent || "0");
+                            // If transposition alters pitch class (i.e. not purely an octave shift like 12 or -12)
+                            if (chromatic !== 0 && chromatic % 12 !== 0) return true;
+                        }
+                    }
+                } catch(e) {}
+            }
+            return false;
         }
 
         // --- AUDIO MIXER LOGIC (MUTE / SOLO / VOLUME) ---
@@ -1678,7 +1711,7 @@
                     currentTimeSignature = { num: 4, den: 4 };
                 }
 
-                // Extract all parts for the Audio Mixer
+                // Extract all parts for the Audio Mixer and auto-mute transposing instruments
                 const partList = xmlDoc.getElementsByTagName("score-part");
                 for (let i = 0; i < partList.length; i++) {
                     let name = `Part ${i + 1}`;
@@ -1686,10 +1719,13 @@
                     if (nameNode && nameNode.textContent.trim()) {
                         name = nameNode.textContent.trim();
                     }
+                    const partId = partList[i].getAttribute("id");
+                    const isTransposed = checkIsTransposedInstrument(name, partId, xmlDoc);
+
                     trackMixerStates[i] = {
                         id: i,
                         name: name,
-                        muted: false,
+                        muted: isTransposed, // Default muted for transposed parts
                         soloed: false,
                         volume: 1.0
                     };
@@ -1757,7 +1793,13 @@
                     highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); 
                     updateProgressUI();
                 }, 200);
-                showToast(`Score rendered (${currentTimeSignature.num}/${currentTimeSignature.den})`, 'success');
+
+                const mutedCount = Object.values(trackMixerStates).filter(t => t.muted).length;
+                if (mutedCount > 0) {
+                    showToast(`Score rendered (${mutedCount} transposing part${mutedCount > 1 ? 's' : ''} muted by default)`, 'success');
+                } else {
+                    showToast(`Score rendered (${currentTimeSignature.num}/${currentTimeSignature.den})`, 'success');
+                }
             } catch (err) {
                 showToast('Failed to draw sheet music.', 'error');
                 return; 
