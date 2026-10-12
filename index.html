@@ -77,7 +77,8 @@
         body.light-mode header .bg-zinc-800,
         body.light-mode header .bg-zinc-950,
         body.light-mode header .bg-zinc-900,
-        body.light-mode #host-roster-sidebar {
+        body.light-mode #host-roster-sidebar,
+        body.light-mode #host-mixer-sidebar {
             background-color: #ffffff !important;
             border-color: #d4d4d8 !important;
         }
@@ -192,7 +193,7 @@
                 </span>
             </div>
                         
-            <div class="flex items-center gap-2 sm:gap-4">
+            <div class="flex items-center gap-2 sm:gap-3">
                 <button onclick="toggleTheme()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Toggle Theme">
                     <i class="fa-solid fa-sun theme-toggle-icon"></i>
                 </button>
@@ -209,6 +210,11 @@
                         <i class="fa-solid fa-play"></i>
                     </button>
                 </div>
+
+                <!-- Mixer Toggle Button -->
+                <button id="btn-mixer" onclick="toggleMixer()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Audio Mixer (Mute/Solo)">
+                    <i class="fa-solid fa-sliders text-amber-500"></i> <span class="hidden xl:inline">Mixer</span>
+                </button>
                                 
                 <button id="btn-focus" onclick="toggleFocusMode()" class="bg-zinc-800 hover:bg-red-600 border border-zinc-700 hover:border-red-500 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Blur student screens">
                     <i class="fa-solid fa-eye"></i> <span class="hidden xl:inline">Eyes on Me</span>
@@ -255,6 +261,33 @@
             <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
                 <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
                 <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
+            </div>
+
+            <!-- HOST AUDIO MIXER SIDEBAR -->
+            <div id="host-mixer-sidebar" class="hidden-view w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col h-full shadow-2xl z-20 transition-all">
+                <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-black/30">
+                    <h3 class="font-bold text-zinc-100 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-amber-500"></i> Audio Mixer
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <button onclick="resetMixer()" class="text-[11px] bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded text-zinc-300 font-medium transition" title="Reset All Mutes and Solos">Reset</button>
+                        <button onclick="toggleMixer()" class="text-zinc-400 hover:text-white transition p-1"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
+                <!-- Master Volume Slider -->
+                <div class="p-3 bg-zinc-950/60 border-b border-zinc-800/80 flex flex-col gap-1.5">
+                    <div class="flex justify-between items-center text-xs font-semibold text-zinc-400">
+                        <span><i class="fa-solid fa-volume-high mr-1 text-zinc-500"></i> Master Out</span>
+                        <span id="master-vol-label" class="font-mono text-zinc-300">100%</span>
+                    </div>
+                    <input type="range" id="master-vol-slider" min="0" max="1" step="0.01" value="1" oninput="setMasterVolume(this.value)" class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                </div>
+
+                <!-- Instrument Tracks List -->
+                <div id="mixer-tracks-list" class="flex-1 overflow-auto p-3 space-y-2.5 osmd-scroll">
+                    <div class="p-4 text-center text-zinc-500 text-sm">Load a score to mix parts.</div>
+                </div>
             </div>
 
             <!-- HOST ROSTER SIDEBAR -->
@@ -423,7 +456,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.14.0 • Real-Time Audio Engine</div>
+        <div>v2.15.0 • Live Mixer Engine</div>
     </footer>
 
     <script type="module">
@@ -512,8 +545,10 @@
         let nextBeatTime = 0.0;
         let schedulerTimerId = null;
 
-        // OSMD Audio Player Instance for Sheet Playback
+        // OSMD Audio Player & Track Mixing Engine
         let osmdAudioPlayer = null;
+        let trackMixerStates = {}; // { [partIndex]: { id: number, name: string, muted: boolean, soloed: boolean, volume: number } }
+        let masterMixerVolume = 1.0;
 
         function getAudioContext() {
             if (!audioCtx) {
@@ -549,7 +584,6 @@
             if (!metronomeActive) return;
             const ctx = getAudioContext();
 
-            // Schedule beats 100ms ahead of current hardware clock
             while (nextBeatTime < ctx.currentTime + 0.1) {
                 playMetronomeClick(nextBeatTime);
 
@@ -579,6 +613,144 @@
             }
 
             schedulerTimerId = setTimeout(schedulerLoop, 25);
+        }
+
+        // --- AUDIO MIXER LOGIC (MUTE / SOLO / VOLUME) ---
+        window.toggleMixer = function() {
+            const sidebar = document.getElementById('host-mixer-sidebar');
+            if (sidebar) sidebar.classList.toggle('hidden-view');
+        };
+
+        window.setMasterVolume = function(val) {
+            masterMixerVolume = parseFloat(val);
+            const label = document.getElementById('master-vol-label');
+            if (label) label.innerText = `${Math.round(masterMixerVolume * 100)}%`;
+            applyMixerToAudio();
+        };
+
+        window.toggleTrackMute = function(partIndex) {
+            if (!trackMixerStates[partIndex]) return;
+            trackMixerStates[partIndex].muted = !trackMixerStates[partIndex].muted;
+            renderMixerUI();
+            applyMixerToAudio();
+        };
+
+        window.toggleTrackSolo = function(partIndex) {
+            if (!trackMixerStates[partIndex]) return;
+            trackMixerStates[partIndex].soloed = !trackMixerStates[partIndex].soloed;
+            renderMixerUI();
+            applyMixerToAudio();
+        };
+
+        window.setTrackVolume = function(partIndex, val) {
+            if (!trackMixerStates[partIndex]) return;
+            trackMixerStates[partIndex].volume = parseFloat(val);
+            const label = document.getElementById(`track-vol-val-${partIndex}`);
+            if (label) label.innerText = `${Math.round(trackMixerStates[partIndex].volume * 100)}%`;
+            applyMixerToAudio();
+        };
+
+        window.resetMixer = function() {
+            Object.keys(trackMixerStates).forEach(idx => {
+                trackMixerStates[idx].muted = false;
+                trackMixerStates[idx].soloed = false;
+                trackMixerStates[idx].volume = 1.0;
+            });
+            masterMixerVolume = 1.0;
+            const mSlider = document.getElementById('master-vol-slider');
+            if (mSlider) mSlider.value = 1.0;
+            const mLabel = document.getElementById('master-vol-label');
+            if (mLabel) mLabel.innerText = "100%";
+            renderMixerUI();
+            applyMixerToAudio();
+            showToast('Mixer reset: all parts unmuted', 'info');
+        };
+
+        function renderMixerUI() {
+            const container = document.getElementById('mixer-tracks-list');
+            if (!container) return;
+
+            const partIndices = Object.keys(trackMixerStates);
+            if (partIndices.length === 0) {
+                container.innerHTML = '<div class="p-4 text-center text-zinc-500 text-sm">Load a score to mix parts.</div>';
+                return;
+            }
+
+            const anySolo = Object.values(trackMixerStates).some(t => t.soloed);
+            container.innerHTML = '';
+
+            partIndices.forEach(idx => {
+                const trk = trackMixerStates[idx];
+                const isAudible = anySolo ? (trk.soloed && !trk.muted) : (!trk.muted);
+                
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-xl border transition-all ${isAudible ? 'bg-zinc-800/80 border-zinc-700' : 'bg-zinc-950/40 border-zinc-800/60 opacity-60'}`;
+
+                const muteClass = trk.muted 
+                    ? 'bg-red-600 text-white font-bold border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' 
+                    : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700';
+
+                const soloClass = trk.soloed 
+                    ? 'bg-amber-500 text-zinc-950 font-bold border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.5)]' 
+                    : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700';
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="font-bold text-sm text-zinc-200 truncate flex-1" title="${escapeHTML(trk.name)}">${escapeHTML(trk.name)}</span>
+                        <div class="flex items-center gap-1.5 flex-none">
+                            <button onclick="toggleTrackMute(${idx})" class="w-7 h-7 rounded border text-xs flex items-center justify-center transition ${muteClass}" title="Mute part">
+                                M
+                            </button>
+                            <button onclick="toggleTrackSolo(${idx})" class="w-7 h-7 rounded border text-xs flex items-center justify-center transition ${soloClass}" title="Solo part">
+                                S
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="range" min="0" max="1" step="0.05" value="${trk.volume}" oninput="setTrackVolume(${idx}, this.value)" class="flex-1 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-red-500">
+                        <span id="track-vol-val-${idx}" class="text-[10px] font-mono text-zinc-400 w-8 text-right">${Math.round(trk.volume * 100)}%</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function applyMixerToAudio() {
+            if (!osmdAudioPlayer) return;
+            const ctx = getAudioContext();
+            const anySolo = Object.values(trackMixerStates).some(t => t.soloed);
+
+            const playerInstruments = osmdAudioPlayer.instruments || 
+                                      (osmdAudioPlayer.score && osmdAudioPlayer.score.instruments) || 
+                                      (osmdAudioPlayer.player && osmdAudioPlayer.player.instruments) || [];
+
+            Object.keys(trackMixerStates).forEach(idxStr => {
+                const idx = parseInt(idxStr);
+                const trk = trackMixerStates[idx];
+                const isAudible = anySolo ? (trk.soloed && !trk.muted) : (!trk.muted);
+                const finalGain = isAudible ? (trk.volume * masterMixerVolume) : 0.0;
+
+                // 1. Direct instrument gain / Web Audio API nodes
+                if (playerInstruments[idx]) {
+                    const inst = playerInstruments[idx];
+                    if (inst.gainNode && inst.gainNode.gain) {
+                        inst.gainNode.gain.setValueAtTime(finalGain, ctx.currentTime);
+                    } else if (typeof inst.setGain === 'function') {
+                        inst.setGain(finalGain);
+                    } else if (typeof inst.setVolume === 'function') {
+                        inst.setVolume(finalGain);
+                    } else if (inst.gain !== undefined) {
+                        inst.gain = finalGain;
+                    }
+                }
+
+                // 2. High-level OsmdAudioPlayer API bindings
+                if (typeof osmdAudioPlayer.setInstrumentGain === 'function') {
+                    osmdAudioPlayer.setInstrumentGain(idx, finalGain);
+                } else if (typeof osmdAudioPlayer.setGain === 'function') {
+                    osmdAudioPlayer.setGain(idx, finalGain);
+                }
+            });
         }
 
         let isDrawMode = false;
@@ -636,7 +808,6 @@
             document.getElementById('avatar-modal').classList.add('hidden-view');
         };
 
-        // Track visibility for student tab-switching & keep live tally
         document.addEventListener("visibilitychange", () => {
             if (isFirebaseActive && roomCode && localStudentId && currentView === 'student') {
                 if (document.hidden) {
@@ -728,7 +899,6 @@
                 const attributesList = xmlDoc.getElementsByTagName("attributes");
                 for (let i = 0; i < attributesList.length; i++) {
                     const attrs = attributesList[i];
-                                        
                     let clef = attrs.getElementsByTagName("clef")[0];
                     if (!clef) {
                         clef = xmlDoc.createElement("clef");
@@ -1153,6 +1323,7 @@
                 if (osmdAudioPlayer) {
                     try {
                         if (osmdAudioPlayer.setBpm) osmdAudioPlayer.setBpm(bpm);
+                        applyMixerToAudio();
                         await osmdAudioPlayer.play();
                         showToast(`Playing sheet music audio (${bpm} BPM)`, 'success');
                     } catch (e) {
@@ -1218,6 +1389,10 @@
             clearInterval(playInterval);
             clearTimeout(schedulerTimerId);
             
+            trackMixerStates = {};
+            masterMixerVolume = 1.0;
+            renderMixerUI();
+
             if (osmdAudioPlayer) {
                 try { osmdAudioPlayer.stop(); } catch(e) {}
             }
@@ -1247,8 +1422,10 @@
             document.getElementById('drop-zone').classList.remove('hidden-view');
             document.getElementById('osmd-host-wrapper').classList.add('hidden-view');
                         
-            const sidebar = document.getElementById('host-roster-sidebar');
-            if(sidebar) sidebar.classList.add('hidden-view');
+            const rosterSidebar = document.getElementById('host-roster-sidebar');
+            if(rosterSidebar) rosterSidebar.classList.add('hidden-view');
+            const mixerSidebar = document.getElementById('host-mixer-sidebar');
+            if(mixerSidebar) mixerSidebar.classList.add('hidden-view');
                         
             document.getElementById('host-bar-display').innerText = "Bar: 1";
             document.getElementById('host-room-code').innerText = "----";
@@ -1484,6 +1661,7 @@
 
         async function renderLoadedScore(xmlContent) {
             currentXmlData = xmlContent;
+            trackMixerStates = {};
                         
             hostRehearsalMarks = {};
             hostRepeatMarks = [];
@@ -1499,6 +1677,24 @@
                 } else {
                     currentTimeSignature = { num: 4, den: 4 };
                 }
+
+                // Extract all parts for the Audio Mixer
+                const partList = xmlDoc.getElementsByTagName("score-part");
+                for (let i = 0; i < partList.length; i++) {
+                    let name = `Part ${i + 1}`;
+                    const nameNode = partList[i].getElementsByTagName("part-name")[0];
+                    if (nameNode && nameNode.textContent.trim()) {
+                        name = nameNode.textContent.trim();
+                    }
+                    trackMixerStates[i] = {
+                        id: i,
+                        name: name,
+                        muted: false,
+                        soloed: false,
+                        volume: 1.0
+                    };
+                }
+                renderMixerUI();
 
                 const parts = xmlDoc.getElementsByTagName("part");
                 if(parts.length > 0) {
@@ -1542,6 +1738,8 @@
                     try {
                         await osmdAudioPlayer.loadScore(osmdHost);
                         if (osmdAudioPlayer.setBpm) osmdAudioPlayer.setBpm(bpm);
+                        applyMixerToAudio();
+
                         osmdAudioPlayer.on("iteration", () => {
                             if (osmdHost && osmdHost.cursor && osmdHost.cursor.Iterator) {
                                 const currentMeasure = osmdHost.cursor.Iterator.CurrentMeasureIndex + 1;
@@ -1841,7 +2039,7 @@
                 loadAnnotations();
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
-        }
+        };
 
         function setupPinchZoom(wrapperId, role) {
             const wrapper = document.getElementById(wrapperId);
@@ -1973,7 +2171,7 @@
             } else {
                 studentAnnotations = [];
             }
-        }
+        };
 
         window.clearAnnotations = function() {
             if(!currentXmlData) return;
