@@ -1534,10 +1534,10 @@
             if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT')) return;
 
             if (currentView === 'host') {
-                if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'ArrowUp') {
+                if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'ArrowDown') {
                     e.preventDefault();
                     advanceHostMeasure(currentMeasureNumber + 1);
-                } else if (e.code === 'ArrowLeft' || e.code === 'ArrowDown') {
+                } else if (e.code === 'ArrowLeft' || e.code === 'ArrowUp') {
                     e.preventDefault();
                     advanceHostMeasure(currentMeasureNumber - 1);
                 } else if (/^[0-9]$/.test(e.key)) {
