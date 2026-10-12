@@ -18,7 +18,7 @@
             background-color: #09090b; /* zinc-950 */
             color: #f4f4f5; /* zinc-100 */
         }
-                
+            
         .osmd-scroll::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -486,6 +486,10 @@
         let bpm = 100;
         let playInterval = null;
         let metroInterval = null;
+
+        // Number Typing Jump State
+        let numberBuffer = "";
+        let numberBufferTimeout = null;
 
         // Time Signature state
         let currentTimeSignature = { num: 4, den: 4 };
@@ -1083,7 +1087,7 @@
                 btn.classList.add('bg-red-600', 'text-white');
                 btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
                 showToast(`Auto-Playback Sweep started at ${bpm} BPM`, 'success');
-                                
+                            
                 // Advance measure according to time signature
                 const beatsInMeasure = (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 === 0) 
                     ? (currentTimeSignature.num / 3) 
@@ -1127,6 +1131,8 @@
             playbackActive = false;
             totalMeasuresCache = 0;
             isTabMode = false;
+            numberBuffer = "";
+            if (numberBufferTimeout) clearTimeout(numberBufferTimeout);
             clearInterval(metroInterval);
             clearInterval(playInterval);
                         
@@ -1269,7 +1275,8 @@
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
                             set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar, tabSwitches: 0 });
                             onDisconnect(myRosterRef).remove();
-                        } else {                            showToast('Room exists, but host has not loaded music yet.', 'error');
+                        } else {
+                            showToast('Room exists, but host has not loaded music yet.', 'error');
                         }
                     } else {
                         showToast('Room not found. Check code.', 'error');
@@ -1512,16 +1519,40 @@
             document.getElementById('osmd-host-container').addEventListener('click', () => advanceHostMeasure(currentMeasureNumber + 1));
         }
 
+        function processNumberJump(targetBar) {
+            if (!osmdHost || !osmdHost.graphic) return;
+            const total = osmdHost.graphic.measureList.length;
+            if (targetBar >= 1 && targetBar <= total) {
+                advanceHostMeasure(targetBar);
+                showToast(`Jumped to Bar ${targetBar}`, 'info');
+            } else {
+                showToast(`Bar ${targetBar} is out of range (1-${total})`, 'error');
+            }
+        }
+
         document.addEventListener('keydown', (e) => {
-            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+            if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT')) return;
 
             if (currentView === 'host') {
-                if (e.code === 'Space' || e.code === 'ArrowRight') {
+                if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'ArrowUp') {
                     e.preventDefault();
                     advanceHostMeasure(currentMeasureNumber + 1);
-                } else if (e.code === 'ArrowLeft') {
+                } else if (e.code === 'ArrowLeft' || e.code === 'ArrowDown') {
                     e.preventDefault();
                     advanceHostMeasure(currentMeasureNumber - 1);
+                } else if (/^[0-9]$/.test(e.key)) {
+                    e.preventDefault();
+                    numberBuffer += e.key;
+                    
+                    if (numberBufferTimeout) clearTimeout(numberBufferTimeout);
+                    
+                    numberBufferTimeout = setTimeout(() => {
+                        const targetBar = parseInt(numberBuffer, 10);
+                        numberBuffer = "";
+                        if (!isNaN(targetBar)) {
+                            processNumberJump(targetBar);
+                        }
+                    }, 1000); // Wait 1 second for multi-digit typing
                 } else if (e.code === 'KeyR' || e.key.toUpperCase() === 'R') {
                     e.preventDefault();
                     let target = 1; 
