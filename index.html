@@ -11,6 +11,8 @@
         
     <script src="https://unpkg.com/opensheetmusicdisplay"></script>
     <script src="https://unpkg.com/@tonejs/midi"></script>
+    <!-- OSMD Audio Player: Real-time Web Audio Synthesizer -->
+    <script src="https://cdn.jsdelivr.net/npm/osmd-audio-player/umd/OsmdAudioPlayer.min.js"></script>
 
     <style>
         body {
@@ -198,12 +200,12 @@
                 <!-- Advanced Host Controls -->
                 <div class="hidden md:flex items-center gap-1 bg-black px-2 py-1.5 rounded-lg border border-zinc-700 shadow-inner">
                     <i class="fa-solid fa-stopwatch text-zinc-500 mx-1"></i>
-                    <input type="number" id="bpm-input" value="100" class="bg-transparent text-white w-12 text-center outline-none font-mono text-sm" title="Beats Per Minute">
+                    <input type="number" id="bpm-input" value="100" class="bg-transparent text-white w-12 text-center outline-none font-mono text-sm" title="Beats Per Minute" onchange="updateLiveBpm(this.value)">
                     <button id="btn-metronome" onclick="toggleMetronome()" class="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition text-zinc-300 mx-0.5" title="Toggle Metronome">
                         <i class="fa-solid fa-bell"></i>
                     </button>
                     <div class="w-px h-5 bg-zinc-700 mx-1"></div>
-                    <button id="btn-play" onclick="togglePlayback()" class="w-7 h-7 rounded bg-green-600/20 text-green-500 hover:bg-green-600/40 flex items-center justify-center transition" title="Auto-Advance Playback">
+                    <button id="btn-play" onclick="togglePlayback()" class="w-7 h-7 rounded bg-green-600/20 text-green-500 hover:bg-green-600/40 flex items-center justify-center transition" title="Play Sheet Audio">
                         <i class="fa-solid fa-play"></i>
                     </button>
                 </div>
@@ -270,7 +272,7 @@
 
     <!-- STUDENT VIEW -->
     <div id="view-student" class="hidden-view flex-1 flex flex-col h-full bg-zinc-950 relative">
-                
+            
         <!-- Focus Mode Overlay -->
         <div id="focus-overlay" class="hidden-view absolute inset-0 z-[100] backdrop-blur-xl bg-black/70 flex flex-col items-center justify-center transition-all duration-300">
             <i class="fa-solid fa-eye text-9xl text-red-600 mb-8 animate-pulse drop-shadow-[0_0_25px_rgba(220,38,38,0.8)]"></i>
@@ -421,7 +423,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.13.0 • Updated: 23 Sep 2026, 09:02 AEST (Sydney)</div>
+        <div>v2.14.0 • Real-Time Audio Engine</div>
     </footer>
 
     <script type="module">
@@ -498,38 +500,85 @@
         let hostZoom = 1.0;
         let studentZoom = 1.0;
 
-        // Tuner
+        // Built-in Tuner
         let tunerActive = false;
         let audioContext = null;
         let analyser = null;
         let microphone = null;
         let tunerRafId = null;
 
-        // Web Audio Context for Metronome Click
+        // Web Audio Context for Lag-Free Metronome & Audio Playback
         let audioCtx = null;
+        let nextBeatTime = 0.0;
+        let schedulerTimerId = null;
 
-        function playMetronomeClick() {
+        // OSMD Audio Player Instance for Sheet Playback
+        let osmdAudioPlayer = null;
+
+        function getAudioContext() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
+            return audioCtx;
+        }
 
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
+        // Hardware-scheduled high precision metronome tick
+        function playMetronomeClick(time) {
+            const ctx = getAudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(1000, audioCtx.currentTime); // High pitch woodblock click sound
+            osc.frequency.setValueAtTime(1000, time);
 
-            gain.gain.setValueAtTime(1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05); // Short snappy burst
+            gain.gain.setValueAtTime(1, time);
+            gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.04);
 
             osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            gain.connect(ctx.destination);
 
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.05);
+            osc.start(time);
+            osc.stop(time + 0.04);
+        }
+
+        // Lookahead scheduler loop runs on Web Audio hardware clock
+        function schedulerLoop() {
+            if (!metronomeActive) return;
+            const ctx = getAudioContext();
+
+            // Schedule beats 100ms ahead of current hardware clock
+            while (nextBeatTime < ctx.currentTime + 0.1) {
+                playMetronomeClick(nextBeatTime);
+
+                const timeUntilClickMs = Math.max(0, (nextBeatTime - ctx.currentTime) * 1000);
+                setTimeout(() => {
+                    const dot = document.getElementById('metro-dot-host');
+                    if (dot) {
+                        dot.style.opacity = '1';
+                        setTimeout(() => { dot.style.opacity = '0'; }, 100);
+                    }
+                }, timeUntilClickMs);
+
+                let factor = 1.0;
+                const ts = currentTimeSignature || { num: 4, den: 4 };
+                if (ts.den === 8) {
+                    factor = (ts.num % 3 === 0) ? 1.0 : 0.5;
+                } else if (ts.den === 2) {
+                    factor = 2.0;
+                } else if (ts.den === 16) {
+                    factor = 0.25;
+                } else {
+                    factor = 4 / ts.den;
+                }
+
+                const secondsPerBeat = (60.0 / bpm) * factor;
+                nextBeatTime += secondsPerBeat;
+            }
+
+            schedulerTimerId = setTimeout(schedulerLoop, 25);
         }
 
         let isDrawMode = false;
@@ -557,7 +606,7 @@
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
-        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","crab","🦖","👻","👽","🤖","🤠","🤡"];
+        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","🦀","🦖","👻","👽","🤖","🤠","🤡"];
 
         window.openAvatarModal = function() {
             const grid = document.getElementById('avatar-grid');
@@ -737,7 +786,6 @@
                     let fretNum = 0;
                     let found = false;
 
-                    // Prefer frets 0-12
                     for (let s = 0; s < 6; s++) {
                         const diff = midiPitch - stringsMidi[s];
                         if (diff >= 0 && diff <= 12) {
@@ -748,7 +796,6 @@
                         }
                     }
                                         
-                    // Fallback higher frets
                     if (!found) {
                         for (let s = 0; s < 6; s++) {
                             const diff = midiPitch - stringsMidi[s];
@@ -761,7 +808,6 @@
                         }
                     }
 
-                    // Force out of range calculation to highest or lowest string available
                     if (!found) {
                         if (midiPitch < stringsMidi[5]) { stringNum = 6; fretNum = midiPitch - stringsMidi[5]; } 
                         else { stringNum = 1; fretNum = midiPitch - stringsMidi[0]; }
@@ -930,7 +976,7 @@
                 toast.classList.add('opacity-0', '-translate-y-4');
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
-        }
+        };
 
         window.flashDot = function(dotId) {
             const dot = document.getElementById(dotId);
@@ -938,10 +984,7 @@
                 dot.style.opacity = '1';
                 setTimeout(() => { dot.style.opacity = '0'; }, 100); 
             }
-            if (currentView === 'host') {
-                playMetronomeClick(); // Play synchronized click sound only for host
-            }
-        }
+        };
 
         window.sendBroadcast = function() {
             const input = document.getElementById('broadcast-input');
@@ -982,17 +1025,37 @@
                 onValue(ref(db, `rooms/${code}/broadcast`), (snap) => {
                     const data = snap.val();
                     if(data && data.text && data.timestamp > lastBroadcastTime) {
-                        if (Date.now() - data.timestamp < 10000) { // Only show if recent
+                        if (Date.now() - data.timestamp < 10000) {
                             lastBroadcastTime = data.timestamp;
                             const overlay = document.getElementById('broadcast-overlay');
                             document.getElementById('broadcast-text').innerText = data.text;
                             overlay.classList.remove('hidden-view');
                             setTimeout(() => {
                                 overlay.classList.add('hidden-view');
-                            }, 2000); // Disappear after 2 seconds
+                            }, 2000);
                         } else {
                             lastBroadcastTime = data.timestamp; 
                         }
+                    }
+                });
+
+                onValue(ref(db, `rooms/${code}/metronome`), (snap) => {
+                    const data = snap.val();
+                    clearInterval(metroInterval);
+                    if(data && data.active) {
+                        const ts = data.timeSig || currentTimeSignature || { num: 4, den: 4 };
+                        let factor = 1.0;
+                        if (ts.den === 8) {
+                            factor = (ts.num % 3 === 0) ? 1.0 : 0.5;
+                        } else if (ts.den === 2) {
+                            factor = 2.0;
+                        } else if (ts.den === 16) {
+                            factor = 0.25;
+                        } else {
+                            factor = 4 / ts.den;
+                        }
+                        const intervalMs = (60000 / data.bpm) * factor;
+                        metroInterval = setInterval(() => flashDot(dotId), intervalMs);
                     }
                 });
             } else if (role === 'host') {
@@ -1023,26 +1086,6 @@
                     }
                 });
             }
-                        
-            onValue(ref(db, `rooms/${code}/metronome`), (snap) => {
-                const data = snap.val();
-                clearInterval(metroInterval);
-                if(data && data.active) {
-                    const ts = data.timeSig || currentTimeSignature || { num: 4, den: 4 };
-                    let factor = 1.0;
-                    if (ts.den === 8) {
-                        factor = (ts.num % 3 === 0) ? 1.0 : 0.5; // compound vs simple 8ths
-                    } else if (ts.den === 2) {
-                        factor = 2.0;
-                    } else if (ts.den === 16) {
-                        factor = 0.25;
-                    } else {
-                        factor = 4 / ts.den;
-                    }
-                    const intervalMs = (60000 / data.bpm) * factor;
-                    metroInterval = setInterval(() => flashDot(dotId), intervalMs);
-                }
-            });
         }
 
         window.toggleFocusMode = function() {
@@ -1060,6 +1103,16 @@
             if (isFirebaseActive && roomCode) set(ref(db, `rooms/${roomCode}/focusMode`), focusActive);
         };
 
+        window.updateLiveBpm = function(val) {
+            bpm = parseInt(val) || 100;
+            if (osmdAudioPlayer && osmdAudioPlayer.setBpm) {
+                osmdAudioPlayer.setBpm(bpm);
+            }
+            if (metronomeActive && isFirebaseActive && roomCode) {
+                set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
+            }
+        };
+
         window.toggleMetronome = function() {
             const btn = document.getElementById('btn-metronome');
             bpm = parseInt(document.getElementById('bpm-input').value) || 100;
@@ -1068,16 +1121,24 @@
             if (metronomeActive) {
                 btn.classList.add('bg-red-600', 'text-white');
                 btn.classList.remove('bg-zinc-800', 'text-zinc-300');
-                showToast(`Metronome started at ${bpm} BPM (${currentTimeSignature.num}/${currentTimeSignature.den})`, 'info');
+                
+                const ctx = getAudioContext();
+                nextBeatTime = ctx.currentTime + 0.05;
+                schedulerLoop();
+
+                showToast(`Hardware Metronome started at ${bpm} BPM`, 'info');
             } else {
                 btn.classList.remove('bg-red-600', 'text-white');
                 btn.classList.add('bg-zinc-800', 'text-zinc-300');
+                clearTimeout(schedulerTimerId);
             }
                         
-            if (isFirebaseActive && roomCode) set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
+            if (isFirebaseActive && roomCode) {
+                set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
+            }
         };
 
-        window.togglePlayback = function() {
+        window.togglePlayback = async function() {
             playbackActive = !playbackActive;
             const btn = document.getElementById('btn-play');
             bpm = parseInt(document.getElementById('bpm-input').value) || 100;
@@ -1086,30 +1147,49 @@
                 btn.classList.remove('bg-green-600/20', 'text-green-500');
                 btn.classList.add('bg-red-600', 'text-white');
                 btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
-                showToast(`Auto-Playback Sweep started at ${bpm} BPM`, 'success');
-                            
-                // Advance measure according to time signature
-                const beatsInMeasure = (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 === 0) 
-                    ? (currentTimeSignature.num / 3) 
-                    : currentTimeSignature.num;
-                let tickFactor = 1.0;
-                if (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 !== 0) tickFactor = 0.5;
-                else if (currentTimeSignature.den === 2) tickFactor = 2.0;
-                else if (currentTimeSignature.den !== 8 && currentTimeSignature.den !== 4) tickFactor = 4 / currentTimeSignature.den;
+                
+                getAudioContext();
 
-                const measureDuration = (60000 / bpm) * tickFactor * beatsInMeasure;
-                playInterval = setInterval(() => {
-                    advanceHostMeasure(currentMeasureNumber + 1);
-                }, measureDuration);
-                            
+                if (osmdAudioPlayer) {
+                    try {
+                        if (osmdAudioPlayer.setBpm) osmdAudioPlayer.setBpm(bpm);
+                        await osmdAudioPlayer.play();
+                        showToast(`Playing sheet music audio (${bpm} BPM)`, 'success');
+                    } catch (e) {
+                        console.warn("Audio player playback fallback:", e);
+                        fallbackSweep();
+                    }
+                } else {
+                    fallbackSweep();
+                }
             } else {
                 btn.classList.add('bg-green-600/20', 'text-green-500');
                 btn.classList.remove('bg-red-600', 'text-white');
                 btn.innerHTML = '<i class="fa-solid fa-play"></i>';
+                
+                if (osmdAudioPlayer) {
+                    try { osmdAudioPlayer.pause(); } catch(e) {}
+                }
                 clearInterval(playInterval);
                 showToast('Playback stopped.', 'info');
             }
         };
+
+        function fallbackSweep() {
+            const beatsInMeasure = (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 === 0) 
+                ? (currentTimeSignature.num / 3) 
+                : currentTimeSignature.num;
+            let tickFactor = 1.0;
+            if (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 !== 0) tickFactor = 0.5;
+            else if (currentTimeSignature.den === 2) tickFactor = 2.0;
+            else if (currentTimeSignature.den !== 8 && currentTimeSignature.den !== 4) tickFactor = 4 / currentTimeSignature.den;
+
+            const measureDuration = (60000 / bpm) * tickFactor * beatsInMeasure;
+            playInterval = setInterval(() => {
+                advanceHostMeasure(currentMeasureNumber + 1);
+            }, measureDuration);
+            showToast(`Auto-advance visual sweep started`, 'info');
+        }
 
         function resetSession() {
             if(isFirebaseActive && roomCode && localStudentId) {
@@ -1133,8 +1213,14 @@
             isTabMode = false;
             numberBuffer = "";
             if (numberBufferTimeout) clearTimeout(numberBufferTimeout);
+            
             clearInterval(metroInterval);
             clearInterval(playInterval);
+            clearTimeout(schedulerTimerId);
+            
+            if (osmdAudioPlayer) {
+                try { osmdAudioPlayer.stop(); } catch(e) {}
+            }
                         
             if(tunerActive) toggleTuner();
 
@@ -1293,6 +1379,7 @@
                     backend: "svg",
                     drawTitle: true,
                     drawPartNames: true,
+                    followCursor: true,
                     darkMode: !isLightMode, 
                     defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
                     defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
@@ -1369,7 +1456,7 @@
                         xml += `  <part id="P${i + 1}">\n`;
                         xml += '    <measure number="1">\n';
                         xml += '      <attributes>\n';
-                        xml += '        <divisions>1</attributes>\n';
+                        xml += '        <divisions>1</divisions>\n';
                         xml += '        <time><beats>4</beats><beat-type>4</beat-type></time>\n';
                         xml += '        <clef><sign>G</sign><line>2</line></clef>\n';
                         xml += '      </attributes>\n';
@@ -1404,7 +1491,6 @@
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(currentXmlData, "text/xml");
                                 
-                // Parse Time Signature
                 const timeNode = xmlDoc.querySelector("time");
                 if (timeNode) {
                     const beats = parseInt(timeNode.querySelector("beats")?.textContent || "4");
@@ -1447,6 +1533,27 @@
                 osmdHost.zoom = hostZoom;
                 osmdHost.render();
                 totalMeasuresCache = osmdHost.graphic.measureList.length;
+
+                // Bind OSMD Audio Player for zero-lag hardware synthesized playback
+                if (window.OsmdAudioPlayer) {
+                    if (!osmdAudioPlayer) {
+                        osmdAudioPlayer = new window.OsmdAudioPlayer();
+                    }
+                    try {
+                        await osmdAudioPlayer.loadScore(osmdHost);
+                        if (osmdAudioPlayer.setBpm) osmdAudioPlayer.setBpm(bpm);
+                        osmdAudioPlayer.on("iteration", () => {
+                            if (osmdHost && osmdHost.cursor && osmdHost.cursor.Iterator) {
+                                const currentMeasure = osmdHost.cursor.Iterator.CurrentMeasureIndex + 1;
+                                if (currentMeasure !== currentMeasureNumber && currentMeasure <= totalMeasuresCache) {
+                                    advanceHostMeasure(currentMeasure);
+                                }
+                            }
+                        });
+                    } catch(audioPlayerErr) {
+                        console.warn("OSMD Audio Player initialisation notice:", audioPlayerErr);
+                    }
+                }
                                 
                 setTimeout(() => { 
                     highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); 
@@ -1552,7 +1659,7 @@
                         if (!isNaN(targetBar)) {
                             processNumberJump(targetBar);
                         }
-                    }, 1000); // Wait 1 second for multi-digit typing
+                    }, 1000);
                 } else if (e.code === 'KeyR' || e.key.toUpperCase() === 'R') {
                     e.preventDefault();
                     let target = 1; 
@@ -1652,10 +1759,8 @@
         };
 
         async function renderStudentTransposedXml(partIndex) {
-            // Calculate total semitone shift (Octaves + Instrument Key)
             const totalTranspose = (currentStudentTranspose * 12) + currentStudentKeyTranspose;
                         
-            // 1. Re-apply visual options
             osmdStudent.setOptions({ 
                 darkMode: !isLightMode,
                 defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
@@ -1663,37 +1768,30 @@
                 defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
             });
 
-            // 2. Load the raw XML or TAB transformed XML
             let loadXml = currentXmlData;
             if (isTabMode) {
                 loadXml = convertToTabXml(currentXmlData, totalTranspose);
             }
             await osmdStudent.load(loadXml);
 
-            // 3. Initialize Transpose Calculator if needed
             if (!osmdStudent.TransposeCalculator && window.opensheetmusicdisplay && window.opensheetmusicdisplay.TransposeCalculator) {
                 osmdStudent.TransposeCalculator = new window.opensheetmusicdisplay.TransposeCalculator();
             }
 
-            // 4. Apply transposition
             const sheet = osmdStudent.Sheet || osmdStudent.sheet;
             if (sheet) {
                 sheet.Transpose = totalTranspose;
-                                
-                // 5. Isolate the correct instrument part
                 for(let i = 0; i < sheet.Instruments.length; i++) {
                     sheet.Instruments[i].Visible = (i === partIndex);
                 }
             }
                         
-            // 6. Force the graphic update to recalculate the key signatures/notes
             try { 
                 osmdStudent.updateGraphic(); 
             } catch(e) { 
                 console.warn("Graphic update issue", e); 
             }
                         
-            // 7. Draw it to the screen
             osmdStudent.zoom = studentZoom;
             osmdStudent.render();
                         
@@ -1733,13 +1831,13 @@
             if(role === 'host' && osmdHost) {
                 hostZoom = parseFloat(val); 
                 osmdHost.zoom = hostZoom; 
-                osmdHost.render();
+                osmdHost.render(); 
                 highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             }
             if(role === 'student' && osmdStudent) {
                 studentZoom = parseFloat(val); 
                 osmdStudent.zoom = studentZoom; 
-                osmdStudent.render();
+                osmdStudent.render(); 
                 loadAnnotations();
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
