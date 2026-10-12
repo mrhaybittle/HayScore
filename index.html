@@ -212,7 +212,7 @@
                 </div>
 
                 <!-- Mixer Toggle Button -->
-                <button id="btn-mixer" onclick="toggleMixer()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Audio Mixer (Mute/Solo)">
+                <button id="btn-mixer" onclick="toggleMixer()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Audio Mixer (Mute/Solo/Drums)">
                     <i class="fa-solid fa-sliders text-amber-500"></i> <span class="hidden xl:inline">Mixer</span>
                 </button>
                                 
@@ -456,7 +456,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.16.0 • Auto-Mute Transposed Parts</div>
+        <div>v2.17.0 • MIDI Channel 10 Drum Synthesizer</div>
     </footer>
 
     <script type="module">
@@ -547,7 +547,7 @@
 
         // OSMD Audio Player & Track Mixing Engine
         let osmdAudioPlayer = null;
-        let trackMixerStates = {}; // { [partIndex]: { id: number, name: string, muted: boolean, soloed: boolean, volume: number } }
+        let trackMixerStates = {}; // { [partIndex]: { id: number, name: string, muted: boolean, soloed: boolean, volume: number, isDrum: boolean } }
         let masterMixerVolume = 1.0;
 
         function getAudioContext() {
@@ -615,23 +615,261 @@
             schedulerTimerId = setTimeout(schedulerLoop, 25);
         }
 
-        // --- TRANSPOSED INSTRUMENT DETECTION HELPER ---
-        function checkIsTransposedInstrument(name, partId, xmlDoc) {
+        // --- GENERAL MIDI CHANNEL 10 DRUM SYNTHESIZER ---
+        function playDrumSound(pitch, time, vol = 1.0) {
+            if (vol <= 0.001) return;
+            const ctx = getAudioContext();
+            const t = (time && time > ctx.currentTime) ? time : ctx.currentTime;
+            const v = Math.min(1.0, Math.max(0.05, vol));
+
+            // Standard General MIDI Channel 10 mapping & notation pitch mappings
+            const isKick = (pitch === 35 || pitch === 36 || pitch === 53 || pitch === 41 || pitch === 43 || pitch === 24);
+            const isSnare = (pitch === 38 || pitch === 40 || pitch === 60 || pitch === 62 || pitch === 72 || pitch === 71);
+            const isSideStick = (pitch === 37);
+            const isClosedHH = (pitch === 42 || pitch === 44 || pitch === 78 || pitch === 79);
+            const isOpenHH = (pitch === 46 || pitch === 81);
+            const isTom = (pitch >= 45 && pitch <= 50) || (pitch >= 64 && pitch <= 69);
+            const isCrash = (pitch === 49 || pitch === 57 || pitch >= 82);
+            const isRide = (pitch === 51 || pitch === 59);
+
+            try {
+                if (isKick) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(155, t);
+                    osc.frequency.exponentialRampToValueAtTime(36, t + 0.12);
+                    gain.gain.setValueAtTime(1.2 * v, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.3);
+                } else if (isSnare) {
+                    // Triangle fundamental body
+                    const osc = ctx.createOscillator();
+                    const oscGain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(185, t);
+                    osc.frequency.exponentialRampToValueAtTime(80, t + 0.08);
+                    oscGain.gain.setValueAtTime(0.7 * v, t);
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+                    osc.connect(oscGain);
+                    oscGain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.12);
+
+                    // Highpass snare wire noise
+                    const bufferSize = Math.floor(ctx.sampleRate * 0.2);
+                    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    const noise = ctx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'highpass';
+                    filter.frequency.setValueAtTime(1200, t);
+                    const noiseGain = ctx.createGain();
+                    noiseGain.gain.setValueAtTime(0.9 * v, t);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+                    noise.connect(filter);
+                    filter.connect(noiseGain);
+                    noiseGain.connect(ctx.destination);
+                    noise.start(t);
+                    noise.stop(t + 0.2);
+                } else if (isSideStick) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(540, t);
+                    gain.gain.setValueAtTime(0.8 * v, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.04);
+                } else if (isOpenHH) {
+                    const bufferSize = Math.floor(ctx.sampleRate * 0.35);
+                    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    const noise = ctx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'highpass';
+                    filter.frequency.setValueAtTime(6500, t);
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0.7 * v, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(ctx.destination);
+                    noise.start(t);
+                    noise.stop(t + 0.35);
+                } else if (isClosedHH) {
+                    const bufferSize = Math.floor(ctx.sampleRate * 0.05);
+                    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    const noise = ctx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'highpass';
+                    filter.frequency.setValueAtTime(7500, t);
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0.65 * v, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(ctx.destination);
+                    noise.start(t);
+                    noise.stop(t + 0.05);
+                } else if (isCrash) {
+                    const bufferSize = Math.floor(ctx.sampleRate * 0.9);
+                    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    const data = buffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    const noise = ctx.createBufferSource();
+                    noise.buffer = buffer;
+                    const filter = ctx.createBiquadFilter();
+                    filter.type = 'bandpass';
+                    filter.frequency.setValueAtTime(5000, t);
+                    filter.Q.setValueAtTime(1.2, t);
+                    const gain = ctx.createGain();
+                    gain.gain.setValueAtTime(0.85 * v, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+                    noise.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(ctx.destination);
+                    noise.start(t);
+                    noise.stop(t + 0.9);
+                } else if (isRide) {
+                    const osc = ctx.createOscillator();
+                    const oscGain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(3200, t);
+                    oscGain.gain.setValueAtTime(0.45 * v, t);
+                    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+                    osc.connect(oscGain);
+                    oscGain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.4);
+                } else if (isTom) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    const baseFreq = (pitch <= 43) ? 100 : (pitch <= 47 ? 135 : 175);
+                    osc.frequency.setValueAtTime(baseFreq, t);
+                    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.55, t + 0.2);
+                    gain.gain.setValueAtTime(0.9 * v, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.25);
+                } else {
+                    // General fallback percussion hit
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(180, t);
+                    osc.frequency.exponentialRampToValueAtTime(60, t + 0.08);
+                    gain.gain.setValueAtTime(0.7 * v, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.1);
+                }
+            } catch(e) {
+                console.warn("Drum synthesis warning:", e);
+            }
+        }
+
+        // Trigger drum sounds from active cursor voice entries during playback
+        function triggerDrumNotesAtCursor() {
+            if (!osmdHost || !osmdHost.cursor || !osmdHost.cursor.Iterator) return;
+            const ctx = getAudioContext();
+            const voiceEntries = osmdHost.cursor.Iterator.CurrentVoiceEntries;
+            if (!voiceEntries || voiceEntries.length === 0) return;
+
+            const anySolo = Object.values(trackMixerStates).some(t => t.soloed);
+
+            for (let i = 0; i < voiceEntries.length; i++) {
+                const ve = voiceEntries[i];
+                const inst = ve.ParentVoice ? ve.ParentVoice.Parent : null;
+                if (!inst) continue;
+
+                let instIdx = (osmdHost.sheet && osmdHost.sheet.Instruments) ? osmdHost.sheet.Instruments.indexOf(inst) : -1;
+                if (instIdx === -1 && inst.Id && osmdHost.sheet && osmdHost.sheet.Instruments) {
+                    instIdx = osmdHost.sheet.Instruments.findIndex(item => item.Id === inst.Id);
+                }
+
+                if (instIdx !== -1 && trackMixerStates[instIdx] && trackMixerStates[instIdx].isDrum) {
+                    const trk = trackMixerStates[instIdx];
+                    const isAudible = anySolo ? (trk.soloed && !trk.muted) : (!trk.muted);
+                    if (isAudible && ve.Notes) {
+                        for (let j = 0; j < ve.Notes.length; j++) {
+                            const n = ve.Notes[j];
+                            let pitch = 38; // Default snare
+                            if (n.halfTone !== undefined) {
+                                pitch = n.halfTone;
+                            } else if (n.Pitch) {
+                                pitch = (n.Pitch.octave + 1) * 12 + n.Pitch.fundamentalNote;
+                            }
+                            playDrumSound(pitch, ctx.currentTime, trk.volume * masterMixerVolume);
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- TRANSPOSED & DRUM INSTRUMENT DETECTION HELPERS ---
+        function checkIsDrumPart(name, partId, xmlDoc) {
             const n = (name || "").toLowerCase();
-            
-            // Standard transposing instruments (winds/brass in Bb, Eb, F, A, etc.)
+            const drumKeywords = [
+                'drum', 'drums', 'drumset', 'drum kit', 'percussion', 'snare', 
+                'cymbals', 'hi-hat', 'hihat', 'tom', 'toms', 'batterie', 
+                'schlagzeug', 'timpani', 'tambourine', 'bongo', 'conga', 'percussive'
+            ];
+            if (drumKeywords.some(kw => n.includes(kw))) return true;
+
+            if (xmlDoc && partId) {
+                try {
+                    const scorePartNode = xmlDoc.querySelector(`score-part[id="${partId}"]`);
+                    if (scorePartNode) {
+                        const midiChannelNode = scorePartNode.querySelector("midi-channel");
+                        if (midiChannelNode && midiChannelNode.textContent.trim() === "10") {
+                            return true;
+                        }
+                    }
+                    const partNode = xmlDoc.querySelector(`part[id="${partId}"]`);
+                    if (partNode) {
+                        const clefSign = partNode.querySelector("clef > sign");
+                        if (clefSign && clefSign.textContent.trim().toUpperCase() === "PERCUSSION") {
+                            return true;
+                        }
+                    }
+                } catch(e) {}
+            }
+            return false;
+        }
+
+        function checkIsTransposedInstrument(name, partId, xmlDoc) {
+            // Drums are rhythm/percussion and must never be muted as a transposed instrument
+            if (checkIsDrumPart(name, partId, xmlDoc)) return false;
+
+            const n = (name || "").toLowerCase();
             const transposingKeywords = [
                 'trumpet', 'cornet', 'flugel', 'fluegel', 'clarinet', 'sax', 'saxophone',
                 'horn', 'cor anglais', 'mellophone', 'alto flute'
             ];
             if (transposingKeywords.some(kw => n.includes(kw))) return true;
 
-            // Transposed key indicators in part names (e.g., "Bb", "Eb", "in F", "in A", "in Bb", "(Bb)")
             if (/\b(bb|eb)\b/i.test(n) || /\bin\s+[a-g][b#]?\b/i.test(n) || /\([a-g][b#]?\)/i.test(n)) {
                 return true;
             }
 
-            // Inspect MusicXML <transpose> element if present in XML attributes
             if (xmlDoc && partId) {
                 try {
                     const partNode = xmlDoc.querySelector(`part[id="${partId}"]`);
@@ -639,7 +877,6 @@
                         const transposeNode = partNode.querySelector("transpose");
                         if (transposeNode) {
                             const chromatic = parseInt(transposeNode.querySelector("chromatic")?.textContent || "0");
-                            // If transposition alters pitch class (i.e. not purely an octave shift like 12 or -12)
                             if (chromatic !== 0 && chromatic % 12 !== 0) return true;
                         }
                     }
@@ -727,9 +964,16 @@
                     ? 'bg-amber-500 text-zinc-950 font-bold border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.5)]' 
                     : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700';
 
+                const drumBadge = trk.isDrum 
+                    ? `<span class="text-[9px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded font-mono font-bold tracking-wide mr-1.5">🥁 DRUMS</span>`
+                    : '';
+
                 card.innerHTML = `
                     <div class="flex items-center justify-between gap-2 mb-2">
-                        <span class="font-bold text-sm text-zinc-200 truncate flex-1" title="${escapeHTML(trk.name)}">${escapeHTML(trk.name)}</span>
+                        <div class="flex items-center truncate flex-1" title="${escapeHTML(trk.name)}">
+                            ${drumBadge}
+                            <span class="font-bold text-sm text-zinc-200 truncate">${escapeHTML(trk.name)}</span>
+                        </div>
                         <div class="flex items-center gap-1.5 flex-none">
                             <button onclick="toggleTrackMute(${idx})" class="w-7 h-7 rounded border text-xs flex items-center justify-center transition ${muteClass}" title="Mute part">
                                 M
@@ -761,9 +1005,11 @@
                 const idx = parseInt(idxStr);
                 const trk = trackMixerStates[idx];
                 const isAudible = anySolo ? (trk.soloed && !trk.muted) : (!trk.muted);
-                const finalGain = isAudible ? (trk.volume * masterMixerVolume) : 0.0;
+                
+                // If it is a drum part, mute it in the Soundfont synth so it never plays piano chords!
+                // Real Channel 10 drum sounds are played via our Web Audio Drum Synthesizer.
+                const finalGain = (trk.isDrum || !isAudible) ? 0.0 : (trk.volume * masterMixerVolume);
 
-                // 1. Direct instrument gain / Web Audio API nodes
                 if (playerInstruments[idx]) {
                     const inst = playerInstruments[idx];
                     if (inst.gainNode && inst.gainNode.gain) {
@@ -777,7 +1023,6 @@
                     }
                 }
 
-                // 2. High-level OsmdAudioPlayer API bindings
                 if (typeof osmdAudioPlayer.setInstrumentGain === 'function') {
                     osmdAudioPlayer.setInstrumentGain(idx, finalGain);
                 } else if (typeof osmdAudioPlayer.setGain === 'function') {
@@ -1655,7 +1900,14 @@
 
                 midi.tracks.forEach((track, i) => {
                     if (track.notes.length > 0) {
-                        xml += `    <score-part id="P${i + 1}"><part-name>${escapeHTML(track.name || 'Track ' + (i + 1))}</part-name></score-part>\n`;
+                        const isPerc = (track.channel === 9 || /drum|percussion/i.test(track.name));
+                        const trackName = isPerc ? (track.name || 'Drums') : (track.name || 'Track ' + (i + 1));
+                        xml += `    <score-part id="P${i + 1}">`;
+                        xml += `<part-name>${escapeHTML(trackName)}</part-name>`;
+                        if (isPerc) {
+                            xml += `<midi-instrument id="P${i + 1}-I1"><midi-channel>10</midi-channel></midi-instrument>`;
+                        }
+                        xml += `</score-part>\n`;
                     }
                 });
 
@@ -1663,12 +1915,17 @@
 
                 midi.tracks.forEach((track, i) => {
                     if (track.notes.length > 0) {
+                        const isPerc = (track.channel === 9 || /drum|percussion/i.test(track.name));
                         xml += `  <part id="P${i + 1}">\n`;
                         xml += '    <measure number="1">\n';
                         xml += '      <attributes>\n';
                         xml += '        <divisions>1</divisions>\n';
                         xml += '        <time><beats>4</beats><beat-type>4</beat-type></time>\n';
-                        xml += '        <clef><sign>G</sign><line>2</line></clef>\n';
+                        if (isPerc) {
+                            xml += '        <clef><sign>percussion</sign></clef>\n';
+                        } else {
+                            xml += '        <clef><sign>G</sign><line>2</line></clef>\n';
+                        }
                         xml += '      </attributes>\n';
                         
                         track.notes.slice(0, 32).forEach(n => {
@@ -1711,7 +1968,7 @@
                     currentTimeSignature = { num: 4, den: 4 };
                 }
 
-                // Extract all parts for the Audio Mixer and auto-mute transposing instruments
+                // Extract all parts for the Audio Mixer
                 const partList = xmlDoc.getElementsByTagName("score-part");
                 for (let i = 0; i < partList.length; i++) {
                     let name = `Part ${i + 1}`;
@@ -1720,14 +1977,17 @@
                         name = nameNode.textContent.trim();
                     }
                     const partId = partList[i].getAttribute("id");
+                    
+                    const isDrum = checkIsDrumPart(name, partId, xmlDoc);
                     const isTransposed = checkIsTransposedInstrument(name, partId, xmlDoc);
 
                     trackMixerStates[i] = {
                         id: i,
                         name: name,
-                        muted: isTransposed, // Default muted for transposed parts
+                        muted: isTransposed, // Default muted for transposed instruments; drums stay active
                         soloed: false,
-                        volume: 1.0
+                        volume: 1.0,
+                        isDrum: isDrum
                     };
                 }
                 renderMixerUI();
@@ -1777,6 +2037,10 @@
                         applyMixerToAudio();
 
                         osmdAudioPlayer.on("iteration", () => {
+                            // 1. Play real Channel 10 drum sounds whenever notes occur on drum tracks
+                            triggerDrumNotesAtCursor();
+
+                            // 2. Cursor visual sync
                             if (osmdHost && osmdHost.cursor && osmdHost.cursor.Iterator) {
                                 const currentMeasure = osmdHost.cursor.Iterator.CurrentMeasureIndex + 1;
                                 if (currentMeasure !== currentMeasureNumber && currentMeasure <= totalMeasuresCache) {
@@ -1794,12 +2058,12 @@
                     updateProgressUI();
                 }, 200);
 
+                const drumCount = Object.values(trackMixerStates).filter(t => t.isDrum).length;
                 const mutedCount = Object.values(trackMixerStates).filter(t => t.muted).length;
-                if (mutedCount > 0) {
-                    showToast(`Score rendered (${mutedCount} transposing part${mutedCount > 1 ? 's' : ''} muted by default)`, 'success');
-                } else {
-                    showToast(`Score rendered (${currentTimeSignature.num}/${currentTimeSignature.den})`, 'success');
-                }
+                let toastMsg = `Score rendered (${currentTimeSignature.num}/${currentTimeSignature.den})`;
+                if (drumCount > 0) toastMsg += ` • 🥁 Drums routed to Channel 10`;
+                if (mutedCount > 0) toastMsg += ` • ${mutedCount} transposed part${mutedCount > 1 ? 's' : ''} muted`;
+                showToast(toastMsg, 'success');
             } catch (err) {
                 showToast('Failed to draw sheet music.', 'error');
                 return; 
