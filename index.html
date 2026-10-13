@@ -571,7 +571,7 @@
         // --- WEB AUDIO SCORE SYNTHESIZER & REAL-TIME AUDIO GRAPH ---
         let scoreEvents = [];
         let measureStartBeats = {};
-        let trackMixerStates = {}; // { [partIndex]: { id, name, muted, soloed, volume, isDrum } }
+        let trackMixerStates = {}; // { [partIndex]: { id, name, muted, soloed, volume, isDrum, octaveShift } }
         let trackGainNodes = {};   // { [partIndex]: GainNode }
         let masterGainNode = null; // Master GainNode -> destination
         let masterMixerVolume = 1.0;
@@ -1096,7 +1096,8 @@
                     if (trk && trk.isDrum) {
                         playDrumSound(ev.pitch, noteAudioTime, gainNode);
                     } else {
-                        playMelodicNote(ev.pitch, noteAudioTime, noteDurationSeconds, gainNode);
+                        const shiftedPitch = ev.pitch + (trk.octaveShift || 0) * 12;
+                        playMelodicNote(shiftedPitch, noteAudioTime, noteDurationSeconds, gainNode);
                     }
                 }
                 playbackNextEventIdx++;
@@ -1232,11 +1233,19 @@
             applyMixerToAudio();
         };
 
+        window.shiftTrackOctave = function(partIndex, amount) {
+            if (!trackMixerStates[partIndex] || trackMixerStates[partIndex].isDrum) return;
+            trackMixerStates[partIndex].octaveShift = (trackMixerStates[partIndex].octaveShift || 0) + amount;
+            renderMixerUI();
+            showToast(`Track "${trackMixerStates[partIndex].name}" pitch shifted by ${amount > 0 ? '+' : ''}${amount} octave(s).`, 'info');
+        };
+
         window.resetMixer = function() {
             Object.keys(trackMixerStates).forEach(idx => {
                 trackMixerStates[idx].muted = false;
                 trackMixerStates[idx].soloed = false;
                 trackMixerStates[idx].volume = 1.0;
+                trackMixerStates[idx].octaveShift = 0;
             });
             masterMixerVolume = 1.0;
             studentLeadMs = 250;
@@ -1285,11 +1294,25 @@
                     ? `<span class="text-[9px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded font-mono font-bold tracking-wide mr-1.5">🥁 DRUMS</span>`
                     : '';
 
+                const currentShift = trk.octaveShift || 0;
+                const shiftText = currentShift === 0 ? '' : `(${currentShift > 0 ? '+' : ''}${currentShift} Oct)`;
+                
+                const octaveControls = !trk.isDrum ? `
+                    <div class="flex items-center gap-1">
+                        <button onclick="shiftTrackOctave(${idx}, -1)" class="w-6 h-6 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300 flex items-center justify-center text-[10px]" title="Octave Down">-</button>
+                        <span class="text-[10px] text-zinc-400 font-mono w-4 text-center" title="Octave Shift">${currentShift}</span>
+                        <button onclick="shiftTrackOctave(${idx}, 1)" class="w-6 h-6 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300 flex items-center justify-center text-[10px]" title="Octave Up">+</button>
+                    </div>
+                ` : '<div></div>';
+
                 card.innerHTML = `
                     <div class="flex items-center justify-between gap-2 mb-2">
-                        <div class="flex items-center truncate flex-1" title="${escapeHTML(trk.name)}">
-                            ${drumBadge}
-                            <span class="font-bold text-sm text-zinc-200 truncate">${escapeHTML(trk.name)}</span>
+                        <div class="flex flex-col truncate flex-1" title="${escapeHTML(trk.name)}">
+                            <div class="flex items-center">
+                                ${drumBadge}
+                                <span class="font-bold text-sm text-zinc-200 truncate">${escapeHTML(trk.name)}</span>
+                            </div>
+                            <span class="text-[10px] text-zinc-500 ml-0.5 h-3">${shiftText}</span>
                         </div>
                         <div class="flex items-center gap-1.5 flex-none">
                             <button onclick="toggleTrackMute(${idx})" class="w-7 h-7 rounded border text-xs flex items-center justify-center transition ${muteClass}" title="Mute part">
@@ -1300,9 +1323,12 @@
                             </button>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 mb-1">
                         <input type="range" min="0" max="1" step="0.05" value="${trk.volume}" oninput="setTrackVolume(${idx}, this.value)" class="flex-1 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-red-500">
                         <span id="track-vol-val-${idx}" class="text-[10px] font-mono text-zinc-400 w-8 text-right">${Math.round(trk.volume * 100)}%</span>
+                    </div>
+                    <div class="flex items-center justify-between mt-1">
+                        ${octaveControls}
                     </div>
                 `;
                 container.appendChild(card);
@@ -2328,7 +2354,8 @@
                         muted: isTransposed,
                         soloed: false,
                         volume: 1.0,
-                        isDrum: isDrum
+                        isDrum: isDrum,
+                        octaveShift: 0
                     };
                 }
                 ensureMixerAudioNodes();
