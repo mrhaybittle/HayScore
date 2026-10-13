@@ -11,8 +11,6 @@
         
     <script src="https://unpkg.com/opensheetmusicdisplay"></script>
     <script src="https://unpkg.com/@tonejs/midi"></script>
-    <!-- OSMD Audio Player: Real-time Web Audio Synthesizer -->
-    <script src="https://cdn.jsdelivr.net/npm/osmd-audio-player/umd/OsmdAudioPlayer.min.js"></script>
 
     <style>
         body {
@@ -456,7 +454,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.17.0 • MIDI Channel 10 Drum Synthesizer</div>
+        <div>v2.18.0 • Real-Time Web Audio Synthesizer Engine</div>
     </footer>
 
     <script type="module">
@@ -507,19 +505,18 @@
         // Rehearsal & Sync States
         let currentMeasureNumber = 1;
         let autoScrollEnabled = true;
-        let currentStudentTranspose = 0; // Octaves
-        let currentStudentKeyTranspose = 0; // Semitones for Instrument Key
+        let currentStudentTranspose = 0;
+        let currentStudentKeyTranspose = 0;
         let totalMeasuresCache = 0;
 
         let hostRehearsalMarks = {}; 
         let hostRepeatMarks = []; 
 
-        // Focus, Metronome & Playback States
+        // Metronome & Playback States
         let focusActive = false;
         let metronomeActive = false;
         let playbackActive = false;
         let bpm = 100;
-        let playInterval = null;
         let metroInterval = null;
 
         // Number Typing Jump State
@@ -540,15 +537,23 @@
         let microphone = null;
         let tunerRafId = null;
 
-        // Web Audio Context for Lag-Free Metronome & Audio Playback
+        // Web Audio Context for Lag-Free Playback & Hardware Clock
         let audioCtx = null;
         let nextBeatTime = 0.0;
         let schedulerTimerId = null;
 
-        // OSMD Audio Player & Track Mixing Engine
-        let osmdAudioPlayer = null;
-        let trackMixerStates = {}; // { [partIndex]: { id: number, name: string, muted: boolean, soloed: boolean, volume: number, isDrum: boolean } }
+        // --- WEB AUDIO SCORE SYNTHESIZER & REAL-TIME AUDIO GRAPH ---
+        let scoreEvents = [];
+        let measureStartBeats = {};
+        let trackMixerStates = {}; // { [partIndex]: { id, name, muted, soloed, volume, isDrum } }
+        let trackGainNodes = {};   // { [partIndex]: GainNode }
+        let masterGainNode = null; // Master GainNode -> destination
         let masterMixerVolume = 1.0;
+
+        let playbackStartTime = 0;
+        let playbackStartBeat = 0;
+        let playbackNextEventIdx = 0;
+        let playbackRafId = null;
 
         function getAudioContext() {
             if (!audioCtx) {
@@ -558,6 +563,45 @@
                 audioCtx.resume();
             }
             return audioCtx;
+        }
+
+        function ensureMixerAudioNodes() {
+            const ctx = getAudioContext();
+            if (!masterGainNode) {
+                masterGainNode = ctx.createGain();
+                masterGainNode.gain.setValueAtTime(masterMixerVolume, ctx.currentTime);
+                masterGainNode.connect(ctx.destination);
+            }
+            Object.keys(trackMixerStates).forEach(idxStr => {
+                const idx = parseInt(idxStr);
+                if (!trackGainNodes[idx]) {
+                    trackGainNodes[idx] = ctx.createGain();
+                    trackGainNodes[idx].connect(masterGainNode);
+                }
+            });
+        }
+
+        function applyMixerToAudio() {
+            const ctx = getAudioContext();
+            ensureMixerAudioNodes();
+            const anySolo = Object.values(trackMixerStates).some(t => t.soloed);
+
+            Object.keys(trackMixerStates).forEach(idxStr => {
+                const idx = parseInt(idxStr);
+                const trk = trackMixerStates[idx];
+                const isAudible = anySolo ? (trk.soloed && !trk.muted) : (!trk.muted);
+                const targetGain = isAudible ? trk.volume : 0.0;
+
+                if (trackGainNodes[idx]) {
+                    trackGainNodes[idx].gain.cancelScheduledValues(ctx.currentTime);
+                    trackGainNodes[idx].gain.setValueAtTime(targetGain, ctx.currentTime);
+                }
+            });
+
+            if (masterGainNode) {
+                masterGainNode.gain.cancelScheduledValues(ctx.currentTime);
+                masterGainNode.gain.setValueAtTime(masterMixerVolume, ctx.currentTime);
+            }
         }
 
         // Hardware-scheduled high precision metronome tick
@@ -579,7 +623,6 @@
             osc.stop(time + 0.04);
         }
 
-        // Lookahead scheduler loop runs on Web Audio hardware clock
         function schedulerLoop() {
             if (!metronomeActive) return;
             const ctx = getAudioContext();
@@ -615,14 +658,49 @@
             schedulerTimerId = setTimeout(schedulerLoop, 25);
         }
 
-        // --- GENERAL MIDI CHANNEL 10 DRUM SYNTHESIZER ---
-        function playDrumSound(pitch, time, vol = 1.0) {
-            if (vol <= 0.001) return;
+        // --- HARDWARE SYNTHESIZERS (MELODIC & CHANNEL 10 DRUMS) ---
+        function playMelodicNote(pitch, time, duration, trackGainNode) {
+            if (!trackGainNode) return;
+            const ctx = getAudioContext();
+            const freq = 440 * Math.pow(2, (pitch - 69) / 12);
+            if (isNaN(freq) || freq < 20 || freq > 9000) return;
+
+            const osc1 = ctx.createOscillator();
+            const osc2 = ctx.createOscillator();
+            const filter = ctx.createBiquadFilter();
+            const noteGain = ctx.createGain();
+
+            osc1.type = 'triangle';
+            osc1.frequency.setValueAtTime(freq, time);
+
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(freq * 1.002, time);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(Math.min(3000, freq * 3.5), time);
+
+            const safeDuration = Math.max(0.04, duration);
+            noteGain.gain.setValueAtTime(0.0001, time);
+            noteGain.gain.linearRampToValueAtTime(0.28, time + 0.008);
+            noteGain.gain.setValueAtTime(0.24, time + safeDuration * 0.85);
+            noteGain.gain.exponentialRampToValueAtTime(0.0001, time + safeDuration);
+
+            osc1.connect(filter);
+            osc2.connect(filter);
+            filter.connect(noteGain);
+            noteGain.connect(trackGainNode);
+
+            osc1.start(time);
+            osc2.start(time);
+            osc1.stop(time + safeDuration);
+            osc2.stop(time + safeDuration);
+        }
+
+        function playDrumSound(pitch, time, trackGainNode) {
+            if (!trackGainNode) return;
             const ctx = getAudioContext();
             const t = (time && time > ctx.currentTime) ? time : ctx.currentTime;
-            const v = Math.min(1.0, Math.max(0.05, vol));
 
-            // Standard General MIDI Channel 10 mapping & notation pitch mappings
             const isKick = (pitch === 35 || pitch === 36 || pitch === 53 || pitch === 41 || pitch === 43 || pitch === 24);
             const isSnare = (pitch === 38 || pitch === 40 || pitch === 60 || pitch === 62 || pitch === 72 || pitch === 71);
             const isSideStick = (pitch === 37);
@@ -637,29 +715,27 @@
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
                     osc.type = 'sine';
-                    osc.frequency.setValueAtTime(155, t);
-                    osc.frequency.exponentialRampToValueAtTime(36, t + 0.12);
-                    gain.gain.setValueAtTime(1.2 * v, t);
+                    osc.frequency.setValueAtTime(160, t);
+                    osc.frequency.exponentialRampToValueAtTime(38, t + 0.12);
+                    gain.gain.setValueAtTime(1.2, t);
                     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
                     osc.connect(gain);
-                    gain.connect(ctx.destination);
+                    gain.connect(trackGainNode);
                     osc.start(t);
                     osc.stop(t + 0.3);
                 } else if (isSnare) {
-                    // Triangle fundamental body
                     const osc = ctx.createOscillator();
                     const oscGain = ctx.createGain();
                     osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(185, t);
+                    osc.frequency.setValueAtTime(180, t);
                     osc.frequency.exponentialRampToValueAtTime(80, t + 0.08);
-                    oscGain.gain.setValueAtTime(0.7 * v, t);
+                    oscGain.gain.setValueAtTime(0.65, t);
                     oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
                     osc.connect(oscGain);
-                    oscGain.connect(ctx.destination);
+                    oscGain.connect(trackGainNode);
                     osc.start(t);
                     osc.stop(t + 0.12);
 
-                    // Highpass snare wire noise
                     const bufferSize = Math.floor(ctx.sampleRate * 0.2);
                     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
                     const data = buffer.getChannelData(0);
@@ -670,11 +746,11 @@
                     filter.type = 'highpass';
                     filter.frequency.setValueAtTime(1200, t);
                     const noiseGain = ctx.createGain();
-                    noiseGain.gain.setValueAtTime(0.9 * v, t);
+                    noiseGain.gain.setValueAtTime(0.85, t);
                     noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
                     noise.connect(filter);
                     filter.connect(noiseGain);
-                    noiseGain.connect(ctx.destination);
+                    noiseGain.connect(trackGainNode);
                     noise.start(t);
                     noise.stop(t + 0.2);
                 } else if (isSideStick) {
@@ -682,10 +758,10 @@
                     const gain = ctx.createGain();
                     osc.type = 'triangle';
                     osc.frequency.setValueAtTime(540, t);
-                    gain.gain.setValueAtTime(0.8 * v, t);
+                    gain.gain.setValueAtTime(0.75, t);
                     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
                     osc.connect(gain);
-                    gain.connect(ctx.destination);
+                    gain.connect(trackGainNode);
                     osc.start(t);
                     osc.stop(t + 0.04);
                 } else if (isOpenHH) {
@@ -699,11 +775,11 @@
                     filter.type = 'highpass';
                     filter.frequency.setValueAtTime(6500, t);
                     const gain = ctx.createGain();
-                    gain.gain.setValueAtTime(0.7 * v, t);
+                    gain.gain.setValueAtTime(0.65, t);
                     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
                     noise.connect(filter);
                     filter.connect(gain);
-                    gain.connect(ctx.destination);
+                    gain.connect(trackGainNode);
                     noise.start(t);
                     noise.stop(t + 0.35);
                 } else if (isClosedHH) {
@@ -717,15 +793,15 @@
                     filter.type = 'highpass';
                     filter.frequency.setValueAtTime(7500, t);
                     const gain = ctx.createGain();
-                    gain.gain.setValueAtTime(0.65 * v, t);
+                    gain.gain.setValueAtTime(0.6, t);
                     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
                     noise.connect(filter);
                     filter.connect(gain);
-                    gain.connect(ctx.destination);
+                    gain.connect(trackGainNode);
                     noise.start(t);
                     noise.stop(t + 0.05);
                 } else if (isCrash) {
-                    const bufferSize = Math.floor(ctx.sampleRate * 0.9);
+                    const bufferSize = Math.floor(ctx.sampleRate * 0.85);
                     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
                     const data = buffer.getChannelData(0);
                     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
@@ -733,51 +809,50 @@
                     noise.buffer = buffer;
                     const filter = ctx.createBiquadFilter();
                     filter.type = 'bandpass';
-                    filter.frequency.setValueAtTime(5000, t);
+                    filter.frequency.setValueAtTime(4500, t);
                     filter.Q.setValueAtTime(1.2, t);
                     const gain = ctx.createGain();
-                    gain.gain.setValueAtTime(0.85 * v, t);
-                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+                    gain.gain.setValueAtTime(0.8, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.85);
                     noise.connect(filter);
                     filter.connect(gain);
-                    gain.connect(ctx.destination);
+                    gain.connect(trackGainNode);
                     noise.start(t);
-                    noise.stop(t + 0.9);
+                    noise.stop(t + 0.85);
                 } else if (isRide) {
                     const osc = ctx.createOscillator();
                     const oscGain = ctx.createGain();
                     osc.type = 'sine';
                     osc.frequency.setValueAtTime(3200, t);
-                    oscGain.gain.setValueAtTime(0.45 * v, t);
+                    oscGain.gain.setValueAtTime(0.45, t);
                     oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
                     osc.connect(oscGain);
-                    oscGain.connect(ctx.destination);
+                    oscGain.connect(trackGainNode);
                     osc.start(t);
                     osc.stop(t + 0.4);
                 } else if (isTom) {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
                     osc.type = 'sine';
-                    const baseFreq = (pitch <= 43) ? 100 : (pitch <= 47 ? 135 : 175);
+                    const baseFreq = (pitch <= 43) ? 95 : (pitch <= 47 ? 130 : 170);
                     osc.frequency.setValueAtTime(baseFreq, t);
                     osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.55, t + 0.2);
-                    gain.gain.setValueAtTime(0.9 * v, t);
+                    gain.gain.setValueAtTime(0.85, t);
                     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
                     osc.connect(gain);
-                    gain.connect(ctx.destination);
+                    gain.connect(trackGainNode);
                     osc.start(t);
                     osc.stop(t + 0.25);
                 } else {
-                    // General fallback percussion hit
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
                     osc.type = 'triangle';
-                    osc.frequency.setValueAtTime(180, t);
+                    osc.frequency.setValueAtTime(170, t);
                     osc.frequency.exponentialRampToValueAtTime(60, t + 0.08);
-                    gain.gain.setValueAtTime(0.7 * v, t);
+                    gain.gain.setValueAtTime(0.65, t);
                     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
                     osc.connect(gain);
-                    gain.connect(ctx.destination);
+                    gain.connect(trackGainNode);
                     osc.start(t);
                     osc.stop(t + 0.1);
                 }
@@ -786,42 +861,159 @@
             }
         }
 
-        // Trigger drum sounds from active cursor voice entries during playback
-        function triggerDrumNotesAtCursor() {
-            if (!osmdHost || !osmdHost.cursor || !osmdHost.cursor.Iterator) return;
-            const ctx = getAudioContext();
-            const voiceEntries = osmdHost.cursor.Iterator.CurrentVoiceEntries;
-            if (!voiceEntries || voiceEntries.length === 0) return;
+        // --- SCORE NOTES PARSER ---
+        function extractScoreNotes(osmd) {
+            const events = [];
+            if (!osmd || !osmd.sheet || !osmd.sheet.Instruments) return events;
 
-            const anySolo = Object.values(trackMixerStates).some(t => t.soloed);
+            const instruments = osmd.sheet.Instruments;
+            for (let instIdx = 0; instIdx < instruments.length; instIdx++) {
+                const inst = instruments[instIdx];
+                if (!inst.Voices) continue;
 
-            for (let i = 0; i < voiceEntries.length; i++) {
-                const ve = voiceEntries[i];
-                const inst = ve.ParentVoice ? ve.ParentVoice.Parent : null;
-                if (!inst) continue;
+                for (let v = 0; v < inst.Voices.length; v++) {
+                    const voice = inst.Voices[v];
+                    if (!voice.VoiceEntries) continue;
 
-                let instIdx = (osmdHost.sheet && osmdHost.sheet.Instruments) ? osmdHost.sheet.Instruments.indexOf(inst) : -1;
-                if (instIdx === -1 && inst.Id && osmdHost.sheet && osmdHost.sheet.Instruments) {
-                    instIdx = osmdHost.sheet.Instruments.findIndex(item => item.Id === inst.Id);
-                }
+                    for (let e = 0; e < voice.VoiceEntries.length; e++) {
+                        const ve = voice.VoiceEntries[e];
+                        if (!ve.Notes) continue;
 
-                if (instIdx !== -1 && trackMixerStates[instIdx] && trackMixerStates[instIdx].isDrum) {
-                    const trk = trackMixerStates[instIdx];
-                    const isAudible = anySolo ? (trk.soloed && !trk.muted) : (!trk.muted);
-                    if (isAudible && ve.Notes) {
-                        for (let j = 0; j < ve.Notes.length; j++) {
-                            const n = ve.Notes[j];
-                            let pitch = 38; // Default snare
-                            if (n.halfTone !== undefined) {
-                                pitch = n.halfTone;
-                            } else if (n.Pitch) {
-                                pitch = (n.Pitch.octave + 1) * 12 + n.Pitch.fundamentalNote;
+                        let beat = 0;
+                        if (ve.Timestamp) {
+                            beat = ve.Timestamp.RealValue * 4;
+                        }
+
+                        for (let n = 0; n < ve.Notes.length; n++) {
+                            const note = ve.Notes[n];
+                            if (note.isRest && typeof note.isRest === 'function' && note.isRest()) continue;
+
+                            let pitch = 60;
+                            if (note.halfTone !== undefined && !isNaN(note.halfTone)) {
+                                pitch = note.halfTone;
+                            } else if (note.Pitch) {
+                                pitch = (note.Pitch.octave + 1) * 12 + note.Pitch.fundamentalNote;
                             }
-                            playDrumSound(pitch, ctx.currentTime, trk.volume * masterMixerVolume);
+
+                            let duration = 1.0;
+                            if (note.Length) {
+                                duration = note.Length.RealValue * 4;
+                            }
+
+                            let measureNumber = 1;
+                            if (note.SourceMeasure) {
+                                measureNumber = note.SourceMeasure.MeasureNumber;
+                            }
+
+                            events.push({
+                                beat: beat,
+                                duration: duration,
+                                pitch: pitch,
+                                trackIndex: instIdx,
+                                measureNumber: measureNumber
+                            });
                         }
                     }
                 }
             }
+
+            events.sort((a, b) => a.beat - b.beat);
+            return events;
+        }
+
+        function getMeasureForBeat(beat) {
+            if (!measureStartBeats || Object.keys(measureStartBeats).length === 0) {
+                const beatsPerMeasure = currentTimeSignature.num || 4;
+                return Math.floor(beat / beatsPerMeasure) + 1;
+            }
+            const measures = Object.keys(measureStartBeats).map(Number).sort((a, b) => a - b);
+            let currentM = measures[0] || 1;
+            for (let i = 0; i < measures.length; i++) {
+                const m = measures[i];
+                if (measureStartBeats[m] <= beat + 0.08) {
+                    currentM = m;
+                } else {
+                    break;
+                }
+            }
+            return currentM;
+        }
+
+        function startScorePlayback() {
+            const ctx = getAudioContext();
+            ensureMixerAudioNodes();
+            applyMixerToAudio();
+
+            const targetBeat = measureStartBeats[currentMeasureNumber] !== undefined 
+                ? measureStartBeats[currentMeasureNumber] 
+                : (currentMeasureNumber - 1) * currentTimeSignature.num;
+
+            playbackStartBeat = targetBeat;
+            playbackStartTime = ctx.currentTime + 0.05;
+
+            playbackNextEventIdx = 0;
+            while (playbackNextEventIdx < scoreEvents.length && scoreEvents[playbackNextEventIdx].beat < targetBeat - 0.001) {
+                playbackNextEventIdx++;
+            }
+
+            scheduleScorePlayback();
+        }
+
+        function stopScorePlayback() {
+            if (playbackRafId) {
+                cancelAnimationFrame(playbackRafId);
+                playbackRafId = null;
+            }
+        }
+
+        function scheduleScorePlayback() {
+            if (!playbackActive) return;
+            const ctx = getAudioContext();
+            const secondsPerBeat = 60.0 / bpm;
+
+            const currentAudioTime = ctx.currentTime;
+            const currentAudioBeat = playbackStartBeat + Math.max(0, (currentAudioTime - playbackStartTime)) / secondsPerBeat;
+
+            const scheduleAheadSeconds = 0.15;
+            const maxScheduleBeat = currentAudioBeat + (scheduleAheadSeconds / secondsPerBeat);
+
+            while (playbackNextEventIdx < scoreEvents.length) {
+                const ev = scoreEvents[playbackNextEventIdx];
+                if (ev.beat > maxScheduleBeat) break;
+
+                const noteAudioTime = playbackStartTime + (ev.beat - playbackStartBeat) * secondsPerBeat;
+                const noteDurationSeconds = ev.duration * secondsPerBeat;
+
+                if (noteAudioTime >= currentAudioTime - 0.05) {
+                    const trk = trackMixerStates[ev.trackIndex];
+                    const gainNode = trackGainNodes[ev.trackIndex];
+
+                    if (trk && trk.isDrum) {
+                        playDrumSound(ev.pitch, noteAudioTime, gainNode);
+                    } else {
+                        playMelodicNote(ev.pitch, noteAudioTime, noteDurationSeconds, gainNode);
+                    }
+                }
+                playbackNextEventIdx++;
+            }
+
+            const currentMeasure = getMeasureForBeat(currentAudioBeat);
+            if (currentMeasure !== currentMeasureNumber && currentMeasure <= totalMeasuresCache && currentMeasure >= 1) {
+                currentMeasureNumber = currentMeasure;
+                highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
+                updateProgressUI();
+                if (isFirebaseActive && roomCode) {
+                    set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
+                }
+            }
+
+            if (playbackNextEventIdx >= scoreEvents.length && currentAudioBeat > (scoreEvents[scoreEvents.length - 1]?.beat || 0) + 4) {
+                togglePlayback();
+                advanceHostMeasure(1);
+                return;
+            }
+
+            playbackRafId = requestAnimationFrame(scheduleScorePlayback);
         }
 
         // --- TRANSPOSED & DRUM INSTRUMENT DETECTION HELPERS ---
@@ -856,7 +1048,6 @@
         }
 
         function checkIsTransposedInstrument(name, partId, xmlDoc) {
-            // Drums are rhythm/percussion and must never be muted as a transposed instrument
             if (checkIsDrumPart(name, partId, xmlDoc)) return false;
 
             const n = (name || "").toLowerCase();
@@ -992,45 +1183,6 @@
             });
         }
 
-        function applyMixerToAudio() {
-            if (!osmdAudioPlayer) return;
-            const ctx = getAudioContext();
-            const anySolo = Object.values(trackMixerStates).some(t => t.soloed);
-
-            const playerInstruments = osmdAudioPlayer.instruments || 
-                                      (osmdAudioPlayer.score && osmdAudioPlayer.score.instruments) || 
-                                      (osmdAudioPlayer.player && osmdAudioPlayer.player.instruments) || [];
-
-            Object.keys(trackMixerStates).forEach(idxStr => {
-                const idx = parseInt(idxStr);
-                const trk = trackMixerStates[idx];
-                const isAudible = anySolo ? (trk.soloed && !trk.muted) : (!trk.muted);
-                
-                // If it is a drum part, mute it in the Soundfont synth so it never plays piano chords!
-                // Real Channel 10 drum sounds are played via our Web Audio Drum Synthesizer.
-                const finalGain = (trk.isDrum || !isAudible) ? 0.0 : (trk.volume * masterMixerVolume);
-
-                if (playerInstruments[idx]) {
-                    const inst = playerInstruments[idx];
-                    if (inst.gainNode && inst.gainNode.gain) {
-                        inst.gainNode.gain.setValueAtTime(finalGain, ctx.currentTime);
-                    } else if (typeof inst.setGain === 'function') {
-                        inst.setGain(finalGain);
-                    } else if (typeof inst.setVolume === 'function') {
-                        inst.setVolume(finalGain);
-                    } else if (inst.gain !== undefined) {
-                        inst.gain = finalGain;
-                    }
-                }
-
-                if (typeof osmdAudioPlayer.setInstrumentGain === 'function') {
-                    osmdAudioPlayer.setInstrumentGain(idx, finalGain);
-                } else if (typeof osmdAudioPlayer.setGain === 'function') {
-                    osmdAudioPlayer.setGain(idx, finalGain);
-                }
-            });
-        }
-
         let isDrawMode = false;
         let currentDrawBox = null;
         let startX, startY;
@@ -1043,7 +1195,6 @@
             }[tag] || tag));
         }
 
-        // Student Roster Name, Avatar & Tab Switch Tally
         let localStudentName = "Student";
         let localStudentId = null;
         let localStudentAvatar = localStorage.getItem('hayscore_avatar') || "👤";
@@ -1553,9 +1704,6 @@
 
         window.updateLiveBpm = function(val) {
             bpm = parseInt(val) || 100;
-            if (osmdAudioPlayer && osmdAudioPlayer.setBpm) {
-                osmdAudioPlayer.setBpm(bpm);
-            }
             if (metronomeActive && isFirebaseActive && roomCode) {
                 set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
             }
@@ -1586,7 +1734,7 @@
             }
         };
 
-        window.togglePlayback = async function() {
+        window.togglePlayback = function() {
             playbackActive = !playbackActive;
             const btn = document.getElementById('btn-play');
             bpm = parseInt(document.getElementById('bpm-input').value) || 100;
@@ -1596,49 +1744,17 @@
                 btn.classList.add('bg-red-600', 'text-white');
                 btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
                 
-                getAudioContext();
-
-                if (osmdAudioPlayer) {
-                    try {
-                        if (osmdAudioPlayer.setBpm) osmdAudioPlayer.setBpm(bpm);
-                        applyMixerToAudio();
-                        await osmdAudioPlayer.play();
-                        showToast(`Playing sheet music audio (${bpm} BPM)`, 'success');
-                    } catch (e) {
-                        console.warn("Audio player playback fallback:", e);
-                        fallbackSweep();
-                    }
-                } else {
-                    fallbackSweep();
-                }
+                startScorePlayback();
+                showToast(`Playing sheet music audio (${bpm} BPM)`, 'success');
             } else {
                 btn.classList.add('bg-green-600/20', 'text-green-500');
                 btn.classList.remove('bg-red-600', 'text-white');
                 btn.innerHTML = '<i class="fa-solid fa-play"></i>';
                 
-                if (osmdAudioPlayer) {
-                    try { osmdAudioPlayer.pause(); } catch(e) {}
-                }
-                clearInterval(playInterval);
+                stopScorePlayback();
                 showToast('Playback stopped.', 'info');
             }
         };
-
-        function fallbackSweep() {
-            const beatsInMeasure = (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 === 0) 
-                ? (currentTimeSignature.num / 3) 
-                : currentTimeSignature.num;
-            let tickFactor = 1.0;
-            if (currentTimeSignature.den === 8 && currentTimeSignature.num % 3 !== 0) tickFactor = 0.5;
-            else if (currentTimeSignature.den === 2) tickFactor = 2.0;
-            else if (currentTimeSignature.den !== 8 && currentTimeSignature.den !== 4) tickFactor = 4 / currentTimeSignature.den;
-
-            const measureDuration = (60000 / bpm) * tickFactor * beatsInMeasure;
-            playInterval = setInterval(() => {
-                advanceHostMeasure(currentMeasureNumber + 1);
-            }, measureDuration);
-            showToast(`Auto-advance visual sweep started`, 'info');
-        }
 
         function resetSession() {
             if(isFirebaseActive && roomCode && localStudentId) {
@@ -1664,16 +1780,16 @@
             if (numberBufferTimeout) clearTimeout(numberBufferTimeout);
             
             clearInterval(metroInterval);
-            clearInterval(playInterval);
             clearTimeout(schedulerTimerId);
+            stopScorePlayback();
             
+            scoreEvents = [];
+            measureStartBeats = {};
             trackMixerStates = {};
+            trackGainNodes = {};
+            masterGainNode = null;
             masterMixerVolume = 1.0;
             renderMixerUI();
-
-            if (osmdAudioPlayer) {
-                try { osmdAudioPlayer.stop(); } catch(e) {}
-            }
                         
             if(tunerActive) toggleTuner();
 
@@ -1952,6 +2068,7 @@
         async function renderLoadedScore(xmlContent) {
             currentXmlData = xmlContent;
             trackMixerStates = {};
+            trackGainNodes = {};
                         
             hostRehearsalMarks = {};
             hostRepeatMarks = [];
@@ -1968,7 +2085,6 @@
                     currentTimeSignature = { num: 4, den: 4 };
                 }
 
-                // Extract all parts for the Audio Mixer
                 const partList = xmlDoc.getElementsByTagName("score-part");
                 for (let i = 0; i < partList.length; i++) {
                     let name = `Part ${i + 1}`;
@@ -1984,13 +2100,15 @@
                     trackMixerStates[i] = {
                         id: i,
                         name: name,
-                        muted: isTransposed, // Default muted for transposed instruments; drums stay active
+                        muted: isTransposed,
                         soloed: false,
                         volume: 1.0,
                         isDrum: isDrum
                     };
                 }
+                ensureMixerAudioNodes();
                 renderMixerUI();
+                applyMixerToAudio();
 
                 const parts = xmlDoc.getElementsByTagName("part");
                 if(parts.length > 0) {
@@ -2026,32 +2144,13 @@
                 osmdHost.render();
                 totalMeasuresCache = osmdHost.graphic.measureList.length;
 
-                // Bind OSMD Audio Player for zero-lag hardware synthesized playback
-                if (window.OsmdAudioPlayer) {
-                    if (!osmdAudioPlayer) {
-                        osmdAudioPlayer = new window.OsmdAudioPlayer();
+                scoreEvents = extractScoreNotes(osmdHost);
+                measureStartBeats = {};
+                scoreEvents.forEach(ev => {
+                    if (measureStartBeats[ev.measureNumber] === undefined) {
+                        measureStartBeats[ev.measureNumber] = ev.beat;
                     }
-                    try {
-                        await osmdAudioPlayer.loadScore(osmdHost);
-                        if (osmdAudioPlayer.setBpm) osmdAudioPlayer.setBpm(bpm);
-                        applyMixerToAudio();
-
-                        osmdAudioPlayer.on("iteration", () => {
-                            // 1. Play real Channel 10 drum sounds whenever notes occur on drum tracks
-                            triggerDrumNotesAtCursor();
-
-                            // 2. Cursor visual sync
-                            if (osmdHost && osmdHost.cursor && osmdHost.cursor.Iterator) {
-                                const currentMeasure = osmdHost.cursor.Iterator.CurrentMeasureIndex + 1;
-                                if (currentMeasure !== currentMeasureNumber && currentMeasure <= totalMeasuresCache) {
-                                    advanceHostMeasure(currentMeasure);
-                                }
-                            }
-                        });
-                    } catch(audioPlayerErr) {
-                        console.warn("OSMD Audio Player initialisation notice:", audioPlayerErr);
-                    }
-                }
+                });
                                 
                 setTimeout(() => { 
                     highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); 
@@ -2199,6 +2298,19 @@
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             updateProgressUI();
                         
+            if (playbackActive) {
+                const ctx = getAudioContext();
+                const targetBeat = measureStartBeats[currentMeasureNumber] !== undefined 
+                    ? measureStartBeats[currentMeasureNumber] 
+                    : (currentMeasureNumber - 1) * currentTimeSignature.num;
+                playbackStartBeat = targetBeat;
+                playbackStartTime = ctx.currentTime;
+                playbackNextEventIdx = 0;
+                while (playbackNextEventIdx < scoreEvents.length && scoreEvents[playbackNextEventIdx].beat < targetBeat - 0.001) {
+                    playbackNextEventIdx++;
+                }
+            }
+
             if (isFirebaseActive && roomCode) {
                 set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
             }
