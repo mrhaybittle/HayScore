@@ -182,6 +182,14 @@
                     <i class="fa-solid fa-magnifying-glass text-zinc-500 text-xs"></i>
                     <input type="range" id="host-zoom-slider" min="0.3" max="2.5" step="0.1" value="1.0" class="w-20" onchange="changeZoom(this.value, 'host')">
                 </div>
+                
+                <!-- HOST PART SELECTOR -->
+                <div class="hidden md:flex relative w-[160px] ml-2">
+                    <select id="host-part-selector" onchange="selectHostPart(this.value)" class="appearance-none w-full bg-black border border-zinc-700 text-white px-3 py-1.5 pr-8 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer text-xs">
+                        <option value="-1" selected>Full Score</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down absolute right-2.5 top-2.5 text-zinc-400 pointer-events-none text-[10px]"></i>
+                </div>
             </div>
 
             <div class="absolute left-1/2 transform -translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md">
@@ -675,6 +683,28 @@
             schedulerTimerId = setTimeout(schedulerLoop, 25);
         }
 
+        function syncMetronomeToPlayback() {
+            if (!metronomeActive || !playbackActive) return;
+            const ctx = getAudioContext();
+            
+            let factor = 1.0;
+            const ts = currentTimeSignature || { num: 4, den: 4 };
+            if (ts.den === 8) factor = (ts.num % 3 === 0) ? 1.0 : 0.5;
+            else if (ts.den === 2) factor = 2.0;
+            else if (ts.den === 16) factor = 0.25;
+            else factor = 4 / ts.den;
+            
+            const metroSecondsPerTick = (60.0 / bpm) * factor;
+            
+            if (ctx.currentTime < playbackStartTime) {
+                nextBeatTime = playbackStartTime;
+            } else {
+                const elapsed = ctx.currentTime - playbackStartTime;
+                const ticksElapsed = Math.ceil(elapsed / metroSecondsPerTick);
+                nextBeatTime = playbackStartTime + ticksElapsed * metroSecondsPerTick;
+            }
+        }
+
         function playMelodicNote(pitch, time, duration, trackGainNode) {
             if (!trackGainNode) return;
             const ctx = getAudioContext();
@@ -1031,6 +1061,7 @@
             }
 
             scheduleScorePlayback();
+            syncMetronomeToPlayback();
         }
 
         function stopScorePlayback() {
@@ -1806,7 +1837,23 @@
         };
 
         window.updateLiveBpm = function(val) {
-            bpm = parseInt(val) || 100;
+            const newBpm = parseInt(val) || 100;
+            if (bpm !== newBpm) {
+                if (playbackActive) {
+                    const ctx = getAudioContext();
+                    const currentAudioTime = ctx.currentTime;
+                    const oldSecondsPerBeat = 60.0 / bpm;
+                    const currentAudioBeat = playbackStartBeat + Math.max(0, (currentAudioTime - playbackStartTime)) / oldSecondsPerBeat;
+                    
+                    playbackStartBeat = currentAudioBeat;
+                    playbackStartTime = currentAudioTime;
+                    
+                    bpm = newBpm;
+                    syncMetronomeToPlayback();
+                } else {
+                    bpm = newBpm;
+                }
+            }
             if (metronomeActive && isFirebaseActive && roomCode) {
                 set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
             }
@@ -1821,8 +1868,12 @@
                 btn.classList.add('bg-red-600', 'text-white');
                 btn.classList.remove('bg-zinc-800', 'text-zinc-300');
                 
-                const ctx = getAudioContext();
-                nextBeatTime = ctx.currentTime + 0.05;
+                if (playbackActive) {
+                    syncMetronomeToPlayback();
+                } else {
+                    const ctx = getAudioContext();
+                    nextBeatTime = ctx.currentTime + 0.05;
+                }
                 schedulerLoop();
 
                 showToast(`Hardware Metronome started at ${bpm} BPM`, 'info');
@@ -1922,6 +1973,9 @@
             if (sSlider) sSlider.value = 1.0;
             hostZoom = 1.0;
             studentZoom = 1.0;
+
+            const hostSelector = document.getElementById('host-part-selector');
+            if (hostSelector) hostSelector.innerHTML = '<option value="-1" selected>Full Score</option>';
 
             const btnTab = document.getElementById('btn-tab');
             if (btnTab) {
@@ -2038,18 +2092,18 @@
                             currentStudentTranspose = 0; 
                             currentStudentKeyTranspose = 0;
                             document.getElementById('key-selector').value = "0";
-                                                        
+                                                                                
                             document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
-                                                        
+                                                                                
                             const selector = document.getElementById('part-selector');
                             selector.classList.remove('bg-zinc-800', 'border-zinc-700', 'text-white');
                             selector.classList.add('bg-red-600', 'border-red-400', 'text-white', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
-                                                        
+                                                                                
                             showToast(`Score downloaded! Please select your part.`, 'success');
                             populateStudentParts(currentXmlData);
-                                                        
+                                                                                
                             attachRoomListeners(input, 'student');
-                                                        
+                                                                                
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
                             set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar, tabSwitches: 0 });
                             onDisconnect(myRosterRef).remove();
@@ -2203,6 +2257,35 @@
             }
         }
 
+        window.populateHostParts = function(xmlDoc) {
+            const partList = xmlDoc.getElementsByTagName("score-part");
+            const selector = document.getElementById('host-part-selector');
+            if (!selector) return;
+            selector.innerHTML = '<option value="-1" selected>Full Score</option>';
+            for(let i=0; i < partList.length; i++) {
+                let name = `Part ${i+1}`;
+                const nameNode = partList[i].getElementsByTagName("part-name")[0];
+                if(nameNode) name = nameNode.textContent;
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.text = name;
+                selector.appendChild(opt);
+            }
+        };
+
+        window.selectHostPart = async function(val) {
+            if (!osmdHost || !osmdHost.sheet) return;
+            const partIndex = parseInt(val);
+            const sheet = osmdHost.sheet;
+            for(let i = 0; i < sheet.Instruments.length; i++) {
+                sheet.Instruments[i].Visible = (partIndex === -1 || i === partIndex);
+            }
+            try { osmdHost.updateGraphic(); } catch(e) {}
+            osmdHost.render();
+            highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
+            showToast(partIndex === -1 ? 'Showing Full Score' : `Showing ${sheet.Instruments[partIndex].nameLabel.text}`, 'info');
+        };
+
         async function renderLoadedScore(xmlContent) {
             currentXmlData = xmlContent;
             currentMeasureNumber = 1;
@@ -2215,6 +2298,8 @@
             try {
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(currentXmlData, "text/xml");
+                
+                populateHostParts(xmlDoc);
                                 
                 const timeNode = xmlDoc.querySelector("time");
                 if (timeNode) {
@@ -2255,13 +2340,13 @@
                     const measures = parts[0].getElementsByTagName("measure");
                     for(let m=0; m<measures.length; m++) {
                         const measureNum = parseInt(measures[m].getAttribute("number") || (m+1));
-                                                
+                                                                        
                         const rehearsals = measures[m].getElementsByTagName("rehearsal");
                         if(rehearsals.length > 0) {
                             const mark = rehearsals[0].textContent.trim().toUpperCase();
                             hostRehearsalMarks[mark] = measureNum;
                         }
-                                                
+                                                                        
                         const repeats = measures[m].getElementsByTagName("repeat");
                         for(let r=0; r<repeats.length; r++) {
                             if(repeats[r].getAttribute("direction") === "forward") {
@@ -2455,6 +2540,7 @@
                 while (playbackNextEventIdx < scoreEvents.length && scoreEvents[playbackNextEventIdx].beat < targetBeat - 0.001) {
                     playbackNextEventIdx++;
                 }
+                syncMetronomeToPlayback();
             }
 
             if (isFirebaseActive && roomCode) {
