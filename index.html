@@ -454,7 +454,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.18.0 • Real-Time Web Audio Synthesizer Engine</div>
+        <div>v2.19.0 • Real-Time Web Audio Synthesizer Engine</div>
     </footer>
 
     <script type="module">
@@ -861,10 +861,50 @@
             }
         }
 
+        // --- CUMULATIVE MEASURE BEATS BUILDER ---
+        function buildMeasureStartBeats(osmd) {
+            const beats = {};
+            const beatsPerMeasure = (currentTimeSignature && currentTimeSignature.num) ? currentTimeSignature.num : 4;
+            const beatUnit = (currentTimeSignature && currentTimeSignature.den) ? (4 / currentTimeSignature.den) : 1;
+            const defaultMeasureBeats = beatsPerMeasure * beatUnit;
+
+            let runningBeat = 0;
+            if (osmd && osmd.sheet && osmd.sheet.SourceMeasures && osmd.sheet.SourceMeasures.length > 0) {
+                let hasValidAbsolute = false;
+                if (osmd.sheet.SourceMeasures.length > 1) {
+                    const m2 = osmd.sheet.SourceMeasures[1];
+                    if (m2.AbsoluteTimestamp && typeof m2.AbsoluteTimestamp.RealValue === 'number' && m2.AbsoluteTimestamp.RealValue > 0) {
+                        hasValidAbsolute = true;
+                    }
+                }
+
+                osmd.sheet.SourceMeasures.forEach((sm, idx) => {
+                    const mNum = (sm.MeasureNumber !== undefined) ? sm.MeasureNumber : (idx + 1);
+
+                    if (hasValidAbsolute && sm.AbsoluteTimestamp && typeof sm.AbsoluteTimestamp.RealValue === 'number') {
+                        beats[mNum] = sm.AbsoluteTimestamp.RealValue * 4;
+                    } else {
+                        beats[mNum] = runningBeat;
+                    }
+
+                    let durBeats = defaultMeasureBeats;
+                    if (sm.Duration && typeof sm.Duration.RealValue === 'number' && sm.Duration.RealValue > 0) {
+                        durBeats = sm.Duration.RealValue * 4;
+                    }
+                    runningBeat = beats[mNum] + durBeats;
+                });
+            }
+            return beats;
+        }
+
         // --- SCORE NOTES PARSER ---
-        function extractScoreNotes(osmd) {
+        function extractScoreNotes(osmd, measureBeats) {
             const events = [];
             if (!osmd || !osmd.sheet || !osmd.sheet.Instruments) return events;
+
+            const beatsPerMeasure = (currentTimeSignature && currentTimeSignature.num) ? currentTimeSignature.num : 4;
+            const beatUnit = (currentTimeSignature && currentTimeSignature.den) ? (4 / currentTimeSignature.den) : 1;
+            const defaultMeasureDuration = beatsPerMeasure * beatUnit;
 
             const instruments = osmd.sheet.Instruments;
             for (let instIdx = 0; instIdx < instruments.length; instIdx++) {
@@ -877,40 +917,48 @@
 
                     for (let e = 0; e < voice.VoiceEntries.length; e++) {
                         const ve = voice.VoiceEntries[e];
-                        if (!ve.Notes) continue;
+                        if (!ve.Notes || ve.Notes.length === 0) continue;
 
-                        let beat = 0;
-                        if (ve.Timestamp) {
-                            beat = ve.Timestamp.RealValue * 4;
+                        let measureNum = 1;
+                        if (ve.ParentSourceMeasure && ve.ParentSourceMeasure.MeasureNumber !== undefined) {
+                            measureNum = ve.ParentSourceMeasure.MeasureNumber;
+                        } else if (ve.Notes[0].SourceMeasure && ve.Notes[0].SourceMeasure.MeasureNumber !== undefined) {
+                            measureNum = ve.Notes[0].SourceMeasure.MeasureNumber;
                         }
+
+                        let intraBeat = 0;
+                        if (ve.Timestamp && typeof ve.Timestamp.RealValue === 'number') {
+                            intraBeat = ve.Timestamp.RealValue * 4;
+                        }
+
+                        const baseBeat = (measureBeats && measureBeats[measureNum] !== undefined)
+                            ? measureBeats[measureNum]
+                            : (measureNum - 1) * defaultMeasureDuration;
+
+                        const absoluteBeat = baseBeat + intraBeat;
 
                         for (let n = 0; n < ve.Notes.length; n++) {
                             const note = ve.Notes[n];
                             if (note.isRest && typeof note.isRest === 'function' && note.isRest()) continue;
 
                             let pitch = 60;
-                            if (note.halfTone !== undefined && !isNaN(note.halfTone)) {
+                            if (note.halfTone !== undefined && !isNaN(note.halfTone) && note.halfTone !== 0) {
                                 pitch = note.halfTone;
                             } else if (note.Pitch) {
                                 pitch = (note.Pitch.octave + 1) * 12 + note.Pitch.fundamentalNote;
                             }
 
                             let duration = 1.0;
-                            if (note.Length) {
+                            if (note.Length && typeof note.Length.RealValue === 'number') {
                                 duration = note.Length.RealValue * 4;
                             }
 
-                            let measureNumber = 1;
-                            if (note.SourceMeasure) {
-                                measureNumber = note.SourceMeasure.MeasureNumber;
-                            }
-
                             events.push({
-                                beat: beat,
+                                beat: absoluteBeat,
                                 duration: duration,
                                 pitch: pitch,
                                 trackIndex: instIdx,
-                                measureNumber: measureNumber
+                                measureNumber: measureNum
                             });
                         }
                     }
@@ -922,15 +970,16 @@
         }
 
         function getMeasureForBeat(beat) {
-            if (!measureStartBeats || Object.keys(measureStartBeats).length === 0) {
+            const measures = Object.keys(measureStartBeats).map(Number).sort((a, b) => a - b);
+            if (measures.length === 0) {
                 const beatsPerMeasure = currentTimeSignature.num || 4;
                 return Math.floor(beat / beatsPerMeasure) + 1;
             }
-            const measures = Object.keys(measureStartBeats).map(Number).sort((a, b) => a - b);
+
             let currentM = measures[0] || 1;
             for (let i = 0; i < measures.length; i++) {
                 const m = measures[i];
-                if (measureStartBeats[m] <= beat + 0.08) {
+                if (beat >= measureStartBeats[m] - 0.05) {
                     currentM = m;
                 } else {
                     break;
@@ -944,9 +993,15 @@
             ensureMixerAudioNodes();
             applyMixerToAudio();
 
-            const targetBeat = measureStartBeats[currentMeasureNumber] !== undefined 
+            if (currentMeasureNumber >= totalMeasuresCache && totalMeasuresCache > 0) {
+                currentMeasureNumber = 1;
+                highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
+                updateProgressUI();
+            }
+
+            const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined) 
                 ? measureStartBeats[currentMeasureNumber] 
-                : (currentMeasureNumber - 1) * currentTimeSignature.num;
+                : (currentMeasureNumber - 1) * (currentTimeSignature.num || 4);
 
             playbackStartBeat = targetBeat;
             playbackStartTime = ctx.currentTime + 0.05;
@@ -1007,7 +1062,8 @@
                 }
             }
 
-            if (playbackNextEventIdx >= scoreEvents.length && currentAudioBeat > (scoreEvents[scoreEvents.length - 1]?.beat || 0) + 4) {
+            const lastEventBeat = scoreEvents.length > 0 ? scoreEvents[scoreEvents.length - 1].beat : 0;
+            if (playbackNextEventIdx >= scoreEvents.length && currentAudioBeat > lastEventBeat + 2) {
                 togglePlayback();
                 advanceHostMeasure(1);
                 return;
@@ -2067,6 +2123,7 @@
 
         async function renderLoadedScore(xmlContent) {
             currentXmlData = xmlContent;
+            currentMeasureNumber = 1;
             trackMixerStates = {};
             trackGainNodes = {};
                         
@@ -2144,13 +2201,8 @@
                 osmdHost.render();
                 totalMeasuresCache = osmdHost.graphic.measureList.length;
 
-                scoreEvents = extractScoreNotes(osmdHost);
-                measureStartBeats = {};
-                scoreEvents.forEach(ev => {
-                    if (measureStartBeats[ev.measureNumber] === undefined) {
-                        measureStartBeats[ev.measureNumber] = ev.beat;
-                    }
-                });
+                measureStartBeats = buildMeasureStartBeats(osmdHost);
+                scoreEvents = extractScoreNotes(osmdHost, measureStartBeats);
                                 
                 setTimeout(() => { 
                     highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); 
@@ -2300,11 +2352,11 @@
                         
             if (playbackActive) {
                 const ctx = getAudioContext();
-                const targetBeat = measureStartBeats[currentMeasureNumber] !== undefined 
+                const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined) 
                     ? measureStartBeats[currentMeasureNumber] 
-                    : (currentMeasureNumber - 1) * currentTimeSignature.num;
+                    : (currentMeasureNumber - 1) * (currentTimeSignature.num || 4);
                 playbackStartBeat = targetBeat;
-                playbackStartTime = ctx.currentTime;
+                playbackStartTime = ctx.currentTime + 0.02;
                 playbackNextEventIdx = 0;
                 while (playbackNextEventIdx < scoreEvents.length && scoreEvents[playbackNextEventIdx].beat < targetBeat - 0.001) {
                     playbackNextEventIdx++;
