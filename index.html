@@ -172,19 +172,27 @@
     <!-- HOST VIEW -->
     <div id="view-host" class="hidden-view flex-1 flex flex-col h-full bg-zinc-950 relative">
         <header class="bg-zinc-900 border-b border-red-900 p-3 sm:p-4 flex items-center justify-between shadow-md z-10 relative">
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3">
                 <button onclick="switchView('home')" class="p-2 hover:bg-red-600/20 text-zinc-400 hover:text-red-500 rounded-lg transition" title="Leave">
                     <i class="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100 hidden lg:block">Conductor</h2>
+                
+                <!-- MOVED BAR DISPLAY TO LEFT SIDE -->
+                <div class="bg-zinc-950 px-4 py-1.5 rounded-xl border border-zinc-800 shadow-md flex items-center">
+                    <span id="host-bar-display" class="text-xl sm:text-2xl font-bold text-white tracking-wide font-mono drop-shadow-md relative">
+                        Bar: 1
+                        <div id="metro-dot-host" class="w-3 h-3 rounded-full bg-red-500 absolute -right-5 top-1/2 transform -translate-y-1/2 opacity-0 transition-opacity duration-100 shadow-[0_0_12px_rgba(239,68,68,0.8)]"></div>
+                    </span>
+                </div>
                                 
-                <div class="hidden md:flex items-center gap-2 bg-black px-3 py-1.5 rounded-lg border border-zinc-700 ml-2">
+                <div class="hidden md:flex items-center gap-2 bg-black px-3 py-1.5 rounded-lg border border-zinc-700">
                     <i class="fa-solid fa-magnifying-glass text-zinc-500 text-xs"></i>
                     <input type="range" id="host-zoom-slider" min="0.3" max="2.5" step="0.1" value="1.0" class="w-20" onchange="changeZoom(this.value, 'host')">
                 </div>
                 
                 <!-- HOST PART SELECTOR -->
-                <div class="hidden md:flex relative w-[160px] ml-2">
+                <div class="hidden md:flex relative w-[140px]">
                     <select id="host-part-selector" onchange="selectHostPart(this.value)" class="appearance-none w-full bg-black border border-zinc-700 text-white px-3 py-1.5 pr-8 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer text-xs">
                         <option value="-1" selected>Full Score</option>
                     </select>
@@ -192,20 +200,16 @@
                 </div>
             </div>
 
-            <div class="absolute left-1/2 transform -translate-x-1/2 bg-zinc-950 px-6 py-1.5 rounded-xl border border-zinc-800 shadow-md">
-                <span id="host-bar-display" class="text-2xl sm:text-3xl font-bold text-white tracking-wide font-mono drop-shadow-md relative">
-                    Bar: 1
-                    <div id="metro-dot-host" class="w-3.5 h-3.5 rounded-full bg-red-500 absolute -right-6 top-1/2 transform -translate-y-1/2 opacity-0 transition-opacity duration-100 shadow-[0_0_12px_rgba(239,68,68,0.8)]"></div>
-                </span>
-            </div>
-                        
             <div class="flex items-center gap-2 sm:gap-3">
                 <button onclick="toggleTheme()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Toggle Theme">
                     <i class="fa-solid fa-sun theme-toggle-icon"></i>
                 </button>
 
-                <!-- Advanced Host Controls -->
+                <!-- Advanced Host Controls with Rewind to Start -->
                 <div class="hidden md:flex items-center gap-1 bg-black px-2 py-1.5 rounded-lg border border-zinc-700 shadow-inner">
+                    <button id="btn-rewind" onclick="rewindToStart()" class="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition text-amber-400 hover:text-amber-300 mr-1" title="Rewind to Start (Key: ,)">
+                        <i class="fa-solid fa-backward-step"></i>
+                    </button>
                     <i class="fa-solid fa-stopwatch text-zinc-500 mx-1"></i>
                     <input type="number" id="bpm-input" value="100" class="bg-transparent text-white w-12 text-center outline-none font-mono text-sm" title="Beats Per Minute" onchange="updateLiveBpm(this.value)">
                     <button id="btn-metronome" onclick="toggleMetronome()" class="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition text-zinc-300 mx-0.5" title="Toggle Metronome">
@@ -290,7 +294,7 @@
                     <input type="range" id="master-vol-slider" min="0" max="1" step="0.01" value="1" oninput="setMasterVolume(this.value)" class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
                 </div>
 
-                <!-- Student Advance Lead Slider (Compensates for Audio & Network Sync) -->
+                <!-- Student Advance Lead Slider -->
                 <div class="p-3 bg-zinc-950/60 border-b border-zinc-800/80 flex flex-col gap-1.5">
                     <div class="flex justify-between items-center text-xs font-semibold text-zinc-400">
                         <span><i class="fa-solid fa-forward-step mr-1 text-red-500"></i> Student Advance Lead</span>
@@ -476,7 +480,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.21.0 • Student Lead Anticipation Engine</div>
+        <div>v2.22.0 • High-Pitch Count-In Engine</div>
     </footer>
 
     <script type="module">
@@ -531,7 +535,6 @@
         let totalMeasuresCache = 0;
 
         // Student Lookahead / Advance Sync Lead (in milliseconds)
-        // Gives student devices a fractional lead ahead of the host downbeat to compensate for network ping & sight-reading
         let studentLeadMs = 250; 
         let lastBroadcastStudentMeasure = 0;
 
@@ -571,9 +574,9 @@
         // --- WEB AUDIO SCORE SYNTHESIZER & REAL-TIME AUDIO GRAPH ---
         let scoreEvents = [];
         let measureStartBeats = {};
-        let trackMixerStates = {}; // { [partIndex]: { id, name, muted, soloed, volume, isDrum, octaveShift } }
-        let trackGainNodes = {};   // { [partIndex]: GainNode }
-        let masterGainNode = null; // Master GainNode -> destination
+        let trackMixerStates = {}; 
+        let trackGainNodes = {};   
+        let masterGainNode = null; 
         let masterMixerVolume = 1.0;
 
         let playbackStartTime = 0;
@@ -647,6 +650,62 @@
             osc.start(time);
             osc.stop(time + 0.04);
         }
+
+        // --- HIGH PITCHED BELL COUNT-IN SYNTHESIZER ---
+        function playHighBellSound(time, isAccent = false) {
+            const ctx = getAudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'sine';
+            const freq = isAccent ? 2000 : 1500; 
+            osc.frequency.setValueAtTime(freq, time);
+
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(isAccent ? 0.8 : 0.5, time + 0.005);
+            gain.gain.exponentialRampToValueAtTime(0.0001, time + (isAccent ? 0.25 : 0.15));
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(time);
+            osc.stop(time + 0.25);
+        }
+
+        function scheduleCountIn(callback) {
+            const ctx = getAudioContext();
+            const startTime = ctx.currentTime + 0.1;
+            const countBeats = (currentTimeSignature && currentTimeSignature.num) ? currentTimeSignature.num : 4;
+            const secondsPerBeat = 60.0 / bpm;
+
+            showToast(`Count-in (${countBeats} beats)...`, 'info');
+
+            for (let b = 0; b < countBeats; b++) {
+                const beatTime = startTime + (b * secondsPerBeat);
+                const isFirstBeat = (b === 0);
+                playHighBellSound(beatTime, isFirstBeat);
+
+                const delayMs = Math.max(0, (beatTime - ctx.currentTime) * 1000);
+                setTimeout(() => {
+                    flashDot('metro-dot-host');
+                }, delayMs);
+            }
+
+            const totalCountDurationMs = countBeats * secondsPerBeat * 1000;
+            setTimeout(() => {
+                if (callback) callback();
+            }, totalCountDurationMs);
+        }
+
+        window.rewindToStart = function() {
+            advanceHostMeasure(1);
+            showToast('Rewound to start (Bar 1)', 'info');
+            scheduleCountIn(() => {
+                if (!playbackActive) {
+                    togglePlayback();
+                }
+            });
+        };
 
         function schedulerLoop() {
             if (!metronomeActive) return;
@@ -1037,31 +1096,41 @@
             ensureMixerAudioNodes();
             applyMixerToAudio();
 
-            if (currentMeasureNumber >= totalMeasuresCache && totalMeasuresCache > 0) {
-                currentMeasureNumber = 1;
-                highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
-                updateProgressUI();
+            const isStartFromBeginning = (currentMeasureNumber === 1 || (currentMeasureNumber >= totalMeasuresCache && totalMeasuresCache > 0));
+
+            const runPlaybackExecution = () => {
+                if (currentMeasureNumber >= totalMeasuresCache && totalMeasuresCache > 0) {
+                    currentMeasureNumber = 1;
+                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
+                    updateProgressUI();
+                }
+
+                const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined) 
+                    ? measureStartBeats[currentMeasureNumber] 
+                    : (currentMeasureNumber - 1) * (currentTimeSignature.num || 4);
+
+                playbackStartBeat = targetBeat;
+                playbackStartTime = ctx.currentTime + 0.05;
+
+                playbackNextEventIdx = 0;
+                while (playbackNextEventIdx < scoreEvents.length && scoreEvents[playbackNextEventIdx].beat < targetBeat - 0.001) {
+                    playbackNextEventIdx++;
+                }
+
+                lastBroadcastStudentMeasure = currentMeasureNumber;
+                if (isFirebaseActive && roomCode) {
+                    set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
+                }
+
+                scheduleScorePlayback();
+                syncMetronomeToPlayback();
+            };
+
+            if (isStartFromBeginning) {
+                scheduleCountIn(runPlaybackExecution);
+            } else {
+                runPlaybackExecution();
             }
-
-            const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined) 
-                ? measureStartBeats[currentMeasureNumber] 
-                : (currentMeasureNumber - 1) * (currentTimeSignature.num || 4);
-
-            playbackStartBeat = targetBeat;
-            playbackStartTime = ctx.currentTime + 0.05;
-
-            playbackNextEventIdx = 0;
-            while (playbackNextEventIdx < scoreEvents.length && scoreEvents[playbackNextEventIdx].beat < targetBeat - 0.001) {
-                playbackNextEventIdx++;
-            }
-
-            lastBroadcastStudentMeasure = currentMeasureNumber;
-            if (isFirebaseActive && roomCode) {
-                set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
-            }
-
-            scheduleScorePlayback();
-            syncMetronomeToPlayback();
         }
 
         function stopScorePlayback() {
@@ -1103,7 +1172,6 @@
                 playbackNextEventIdx++;
             }
 
-            // 1. Host Visual Position (Synchronous with audio playback)
             const currentMeasure = getMeasureForBeat(currentAudioBeat);
             if (currentMeasure !== currentMeasureNumber && currentMeasure <= totalMeasuresCache && currentMeasure >= 1) {
                 currentMeasureNumber = currentMeasure;
@@ -1111,7 +1179,6 @@
                 updateProgressUI();
             }
 
-            // 2. Student Anticipation Position (Advances a fraction earlier so students can read ahead & compensate for Wi-Fi delay)
             const studentLeadSeconds = studentLeadMs / 1000.0;
             const studentLeadBeats = studentLeadSeconds / secondsPerBeat;
             const targetStudentMeasure = getMeasureForBeat(currentAudioBeat + studentLeadBeats);
@@ -1359,7 +1426,7 @@
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
-        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","🦀","🦖","👻","👽","🤖","🤠","🤡"];
+        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","crab","🦖","👻","👽","🤖","🤠","🤡"];
 
         window.openAvatarModal = function() {
             const grid = document.getElementById('avatar-grid');
@@ -2049,7 +2116,6 @@
             }
         }
 
-        // --- IMMEDIATE VIEW SWITCHER (NEVER BLOCKED ON ASYNC NETWORK/AUTH) ---
         window.switchView = function(viewName) {
             if (viewName === 'home') {
                 resetSession();
@@ -2118,18 +2184,18 @@
                             currentStudentTranspose = 0; 
                             currentStudentKeyTranspose = 0;
                             document.getElementById('key-selector').value = "0";
-                                                                                
+                                                                                                        
                             document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
-                                                                                
+                                                                                                        
                             const selector = document.getElementById('part-selector');
                             selector.classList.remove('bg-zinc-800', 'border-zinc-700', 'text-white');
                             selector.classList.add('bg-red-600', 'border-red-400', 'text-white', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
-                                                                                
+                                                                                                        
                             showToast(`Score downloaded! Please select your part.`, 'success');
                             populateStudentParts(currentXmlData);
-                                                                                
+                                                                                                        
                             attachRoomListeners(input, 'student');
-                                                                                
+                                                                                                        
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
                             set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar, tabSwitches: 0 });
                             onDisconnect(myRosterRef).remove();
@@ -2367,13 +2433,13 @@
                     const measures = parts[0].getElementsByTagName("measure");
                     for(let m=0; m<measures.length; m++) {
                         const measureNum = parseInt(measures[m].getAttribute("number") || (m+1));
-                                                                        
+                                                                                
                         const rehearsals = measures[m].getElementsByTagName("rehearsal");
                         if(rehearsals.length > 0) {
                             const mark = rehearsals[0].textContent.trim().toUpperCase();
                             hostRehearsalMarks[mark] = measureNum;
                         }
-                                                                        
+                                                                                
                         const repeats = measures[m].getElementsByTagName("repeat");
                         for(let r=0; r<repeats.length; r++) {
                             if(repeats[r].getAttribute("direction") === "forward") {
@@ -2501,7 +2567,10 @@
             if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT')) return;
 
             if (currentView === 'host') {
-                if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'ArrowDown') {
+                if (e.code === 'Comma' || e.key === ',') {
+                    e.preventDefault();
+                    rewindToStart();
+                } else if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'ArrowDown') {
                     e.preventDefault();
                     advanceHostMeasure(currentMeasureNumber + 1);
                 } else if (e.code === 'ArrowLeft' || e.code === 'ArrowUp') {
