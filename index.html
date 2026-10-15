@@ -480,7 +480,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.22.0 • High-Pitch Count-In Engine</div>
+        <div>v2.23.0 • Synced Metronome & Top-Left Conductor Notifications</div>
     </footer>
 
     <script type="module">
@@ -693,6 +693,9 @@
 
             const totalCountDurationMs = countBeats * secondsPerBeat * 1000;
             setTimeout(() => {
+                if (metronomeActive) {
+                    syncMetronomeToPlayback();
+                }
                 if (callback) callback();
             }, totalCountDurationMs);
         }
@@ -743,7 +746,7 @@
         }
 
         function syncMetronomeToPlayback() {
-            if (!metronomeActive || !playbackActive) return;
+            if (!metronomeActive) return;
             const ctx = getAudioContext();
             
             let factor = 1.0;
@@ -755,12 +758,16 @@
             
             const metroSecondsPerTick = (60.0 / bpm) * factor;
             
-            if (ctx.currentTime < playbackStartTime) {
-                nextBeatTime = playbackStartTime;
+            if (playbackActive) {
+                if (ctx.currentTime < playbackStartTime) {
+                    nextBeatTime = playbackStartTime;
+                } else {
+                    const elapsed = ctx.currentTime - playbackStartTime;
+                    const ticksElapsed = Math.ceil(elapsed / metroSecondsPerTick);
+                    nextBeatTime = playbackStartTime + ticksElapsed * metroSecondsPerTick;
+                }
             } else {
-                const elapsed = ctx.currentTime - playbackStartTime;
-                const ticksElapsed = Math.ceil(elapsed / metroSecondsPerTick);
-                nextBeatTime = playbackStartTime + ticksElapsed * metroSecondsPerTick;
+                nextBeatTime = ctx.currentTime + 0.05;
             }
         }
 
@@ -1426,7 +1433,7 @@
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
-        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","crab","🦖","👻","👽","🤖","🤠","🤡"];
+        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","crab","rex","👻","👽","🤖","🤠","🤡"];
 
         window.openAvatarModal = function() {
             const grid = document.getElementById('avatar-grid');
@@ -1779,6 +1786,14 @@
         window.showToast = function(message, type = 'info') {
             const container = document.getElementById('toast-container');
             if (!container) return;
+            
+            // Positioning adjust: top left under Conductor when in host view to avoid button occlusion
+            if (currentView === 'host') {
+                container.className = "fixed top-16 left-6 z-50 flex flex-col gap-2 transition-all duration-300 pointer-events-none";
+            } else {
+                container.className = "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 transition-all duration-300 pointer-events-none";
+            }
+
             const toast = document.createElement('div');
             let styleClasses = 'bg-zinc-800 border border-zinc-700 text-zinc-100';
             let icon = 'fa-info-circle text-zinc-400';
