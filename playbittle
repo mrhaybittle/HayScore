@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>SheetReader</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- ABCjs Library for Sheet Music Rendering and Synth Audio -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/abcjs/6.2.2/abcjs-basic-min.js"></script>
+    <!-- PDF.js for rendering PDF documents -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Sortable.js for Drag-and-Drop Page Rearranging -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    
+    <script>
+        // Configure PDF.js worker for GitHub Pages compatibility
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <style>
+        /* Modern light UI layout */
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Full-bleed paper container without letterboxing */
+        .paper-canvas {
+            width: 100%;
+            min-height: 100%;
+            background-color: #ffffff;
+            transition: transform 0.15s ease-out;
+            transform-origin: top center;
+        }
+
+        /* ABCjs SVG auto-stretch and styling */
+        #paper svg {
+            width: 100% !important;
+            height: auto !important;
+            display: block;
+        }
+
+        /* ABCjs Cursor Highlight Styling */
+        .abcjs-highlight {
+            fill: #2563eb !important;
+            stroke: #1d4ed8 !important;
+        }
+        
+        .abcjs-cursor {
+            stroke: #dc2626;
+            stroke-width: 2.5px;
+        }
+
+        /* Clean light scrollbars */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 5px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .sortable-ghost {
+            opacity: 0.4;
+            border: 2px dashed #3b82f6 !important;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col antialiased text-slate-800 bg-white selection:bg-blue-100 selection:text-blue-900">
+
+    <!-- Compact Header Toolbar -->
+    <header class="w-full bg-slate-900 text-slate-100 px-4 py-2 shadow-md border-b border-slate-800 flex-none z-30">
+        <div class="w-full flex flex-wrap items-center justify-between gap-2 text-sm">
+            
+            <!-- Left: Logo, File Import, Camera & Page Manager -->
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 font-bold text-white text-base mr-2">
+                    <i data-lucide="music-2" class="w-5 h-5 text-blue-400"></i>
+                    <span class="hidden sm:inline">SheetReader</span>
+                </div>
+                
+                <!-- Open File Dropdown / Input -->
+                <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors" title="Import ABC, MusicXML, PDF, or Images">
+                    <i data-lucide="folder-open" class="w-3.5 h-3.5 text-blue-400"></i>
+                    <span>Open File</span>
+                    <input type="file" id="fileInput" accept=".abc,.txt,.xml,.musicxml,.pdf,image/png,image/jpeg,image/jpg,image/webp,image/gif" class="hidden" multiple />
+                </label>
+
+                <!-- Camera Scan Button -->
+                <button id="btnCamera" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors" title="Scan Sheet Music with Camera">
+                    <i data-lucide="camera" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span class="hidden md:inline">Scan</span>
+                </button>
+
+                <!-- Rearrange / Page Manager Button -->
+                <button id="btnRearrange" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled title="Rearrange Pages">
+                    <i data-lucide="layers" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span class="hidden md:inline">Pages</span>
+                </button>
+            </div>
+
+            <!-- Center: Audio Playback & Tempo Controls (ABC/MusicXML) -->
+            <div class="flex items-center gap-2 bg-slate-950/80 px-3 py-1 rounded-xl border border-slate-800">
+                <button id="btnPlay" class="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-full transition-all disabled:opacity-40 disabled:hover:bg-blue-600 shadow-sm" disabled title="Play / Pause">
+                    <i id="playIcon" data-lucide="play" class="w-4 h-4 fill-current"></i>
+                </button>
+                <button id="btnStop" class="text-slate-400 hover:text-white p-1.5 rounded-lg transition-colors disabled:opacity-30" disabled title="Stop">
+                    <i data-lucide="square" class="w-4 h-4"></i>
+                </button>
+
+                <div class="h-4 w-px bg-slate-800"></div>
+
+                <!-- Tempo Control -->
+                <div class="flex items-center gap-2">
+                    <i data-lucide="gauge" class="w-4 h-4 text-slate-400"></i>
+                    <input type="range" id="tempoSlider" min="40" max="240" value="120" class="w-16 md:w-28 accent-blue-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer">
+                    <span id="bpmDisplay" class="text-xs font-mono w-14 text-slate-300">120 BPM</span>
+                </div>
+            </div>
+
+            <!-- Right: Zoom Controls & Clear -->
+            <div class="flex items-center gap-1 sm:gap-2">
+                <div class="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700">
+                    <button id="btnZoomOut" class="p-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Zoom Out">
+                        <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <span id="zoomDisplay" class="text-xs font-mono text-slate-300 px-2 min-w-[3rem] text-center">100%</span>
+                    <button id="btnZoomIn" class="p-1.5 text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors" title="Zoom In">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button id="btnFit" class="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded text-xs font-medium border-l border-slate-700" title="Reset Scale">
+                        Reset
+                    </button>
+                </div>
+
+                <button id="btnClear" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors" title="Clear Sheet Music">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Main Display Area -->
+    <div class="flex-1 w-full relative flex overflow-hidden bg-white">
+        
+        <!-- Full Bleed Scrollable Sheet Area -->
+        <main class="flex-1 w-full h-full overflow-y-auto overflow-x-hidden bg-white p-4 sm:p-8 md:p-12">
+            <div id="paperWrapper" class="paper-canvas max-w-none w-full min-h-full bg-white flex flex-col items-center">
+                
+                <!-- Empty State -->
+                <div id="dropZone" class="w-full h-full min-h-[70vh] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-8 text-center bg-slate-50/50 hover:bg-blue-50/30 transition-colors cursor-pointer my-auto">
+                    <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4 shadow-sm">
+                        <i data-lucide="file-music" class="w-8 h-8"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-2">No Sheet Music Loaded</h2>
+                    <p class="text-sm text-slate-500 max-w-md mb-6 leading-relaxed">
+                        Drag and drop <strong>ABC, MusicXML, PDF, or Images (JPG, PNG)</strong> here, scan with your camera, or choose an option below.
+                    </p>
+                    <div class="flex flex-wrap gap-3 justify-center">
+                        <button id="btnBrowseFile" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5">
+                            <i data-lucide="upload" class="w-4 h-4"></i> Browse File
+                        </button>
+                        <button id="btnDropZoneCamera" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5">
+                            <i data-lucide="camera" class="w-4 h-4"></i> Scan Sheet Music
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sheet Music Rendered Container -->
+                <div id="paper" class="w-full bg-white hidden flex flex-col items-center gap-6"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Camera Viewfinder Modal -->
+    <div id="cameraModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center text-slate-100">
+                <span class="font-semibold text-sm flex items-center gap-2">
+                    <i data-lucide="camera" class="w-4 h-4 text-emerald-400"></i> Scan Sheet Music
+                </span>
+                <button id="btnCloseCamera" class="text-slate-400 hover:text-white p-1 rounded">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="relative bg-black flex items-center justify-center min-h-[300px]">
+                <video id="cameraVideo" autoplay playsinline webkit-playsinline muted class="w-full h-auto max-h-[60vh] object-contain"></video>
+                <canvas id="cameraCanvas" class="hidden"></canvas>
+            </div>
+            <div class="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+                <span class="text-xs text-slate-400">Align page in clear lighting</span>
+                <button id="btnCapture" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg transition-all">
+                    <i data-lucide="aperture" class="w-4 h-4"></i> Capture Page
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Rearrange Modal -->
+    <div id="rearrangeModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
+            <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center text-slate-100">
+                <div>
+                    <h3 class="font-semibold text-sm flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i> Rearrange Pages
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">Drag tiles or use buttons to reorder pages</p>
+                </div>
+                <button id="btnCloseRearrange" class="text-slate-400 hover:text-white p-1 rounded">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div id="pageGrid" class="flex-1 p-6 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 bg-slate-900/50">
+                <!-- Dynamic page tiles -->
+            </div>
+
+            <div class="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-end gap-3">
+                <button id="btnCancelRearrange" class="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition-colors">
+                    Cancel
+                </button>
+                <button id="btnApplyRearrange" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-md transition-all">
+                    <i data-lucide="check" class="w-4 h-4"></i> Save Order
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Synth Audio Player Element -->
+    <div id="audio-player" class="hidden"></div>
+
+    <script>
+        // Global State
+        let currentScale = 1.0;
+        let abcNotation = '';
+        let visualObj = null;
+        let synthControl = null;
+        let timingCallbacks = null;
+        let isPlaying = false;
+        let currentBpm = 120;
+
+        // Multi-page document store
+        let pageList = [];
+        let currentMode = 'empty';
+        let cameraStream = null;
+        let sortableInstance = null;
+
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const btnBrowseFile = document.getElementById('btnBrowseFile');
+        const btnDropZoneCamera = document.getElementById('btnDropZoneCamera');
+        const paper = document.getElementById('paper');
+        const paperWrapper = document.getElementById('paperWrapper');
+        const btnPlay = document.getElementById('btnPlay');
+        const btnStop = document.getElementById('btnStop');
+        const playIcon = document.getElementById('playIcon');
+        const tempoSlider = document.getElementById('tempoSlider');
+        const bpmDisplay = document.getElementById('bpmDisplay');
+        const btnZoomIn = document.getElementById('btnZoomIn');
+        const btnZoomOut = document.getElementById('btnZoomOut');
+        const btnFit = document.getElementById('btnFit');
+        const zoomDisplay = document.getElementById('zoomDisplay');
+        const btnClear = document.getElementById('btnClear');
+        const btnRearrange = document.getElementById('btnRearrange');
+
+        // Camera Modal Elements
+        const btnCamera = document.getElementById('btnCamera');
+        const cameraModal = document.getElementById('cameraModal');
+        const btnCloseCamera = document.getElementById('btnCloseCamera');
+        const cameraVideo = document.getElementById('cameraVideo');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+        const btnCapture = document.getElementById('btnCapture');
+
+        // Rearrange Modal Elements
+        const rearrangeModal = document.getElementById('rearrangeModal');
+        const btnCloseRearrange = document.getElementById('btnCloseRearrange');
+        const btnCancelRearrange = document.getElementById('btnCancelRearrange');
+        const btnApplyRearrange = document.getElementById('btnApplyRearrange');
+        const pageGrid = document.getElementById('pageGrid');
+
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // MusicXML to ABC Converter Helper
+        function convertMusicXmlToAbc(xmlText) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                
+                let title = "MusicXML Score";
+                const titleNode = xmlDoc.querySelector("work-title") || xmlDoc.querySelector("movement-title");
+                if (titleNode && titleNode.textContent) title = titleNode.textContent.trim();
+
+                let key = "C";
+                const fifthsNode = xmlDoc.querySelector("fifths");
+                if (fifthsNode) {
+                    const fifths = parseInt(fifthsNode.textContent, 10);
+                    const keyMap = { '-7':'Cb', '-6':'Gb', '-5':'Db', '-4':'Ab', '-3':'Eb', '-2':'Bb', '-1':'F', '0':'C', '1':'G', '2':'D', '3':'A', '4':'E', '5':'B', '6':'F#', '7':'C#' };
+                    if (keyMap[fifths]) key = keyMap[fifths];
+                }
+
+                let beats = "4", beatType = "4";
+                const beatsNode = xmlDoc.querySelector("beats");
+                const beatTypeNode = xmlDoc.querySelector("beat-type");
+                if (beatsNode && beatTypeNode) {
+                    beats = beatsNode.textContent.trim();
+                    beatType = beatTypeNode.textContent.trim();
+                }
+
+                let abc = `X:1\nT:${title}\nM:${beats}/${beatType}\nL:1/4\nK:${key}\n`;
+                let notes = [];
+
+                const xmlNotes = xmlDoc.querySelectorAll("note");
+
+                xmlNotes.forEach((n) => {
+                    const isRest = n.querySelector("rest");
+                    if (isRest) {
+                        notes.push("z");
+                        return;
+                    }
+
+                    const step = n.querySelector("step")?.textContent || "C";
+                    const octave = parseInt(n.querySelector("octave")?.textContent || "4", 10);
+                    const alter = parseInt(n.querySelector("alter")?.textContent || "0", 10);
+
+                    let acc = "";
+                    if (alter === 1) acc = "^";
+                    else if (alter === -1) acc = "_";
+                    else if (alter === 2) acc = "^^";
+                    else if (alter === -2) acc = "__";
+
+                    let noteStr = step;
+                    if (octave >= 5) {
+                        noteStr = step.toLowerCase();
+                        if (octave > 5) noteStr += "'".repeat(octave - 5);
+                    } else if (octave < 4) {
+                        noteStr = step.toUpperCase() + ",".repeat(4 - octave);
+                    }
+
+                    notes.push(acc + noteStr);
+                });
+
+                if (notes.length === 0) {
+                    return `X:1\nT:${title}\nM:4/4\nK:C\n| C D E F | G A B c |`;
+                }
+
+                let formattedBody = "";
+                for (let i = 0; i < notes.length; i++) {
+                    formattedBody += notes[i] + " ";
+                    if ((i + 1) % 4 === 0) formattedBody += "| ";
+                    if ((i + 1) % 16 === 0) formattedBody += "\n";
+                }
+                if (!formattedBody.endsWith("| ")) formattedBody += "|";
+
+                return abc + formattedBody;
+            } catch (e) {
+                console.error("XML Parsing Error", e);
+                return `X:1\nT:Imported Score\nM:4/4\nK:C\n| C D E F | G A B c |`;
+            }
+        }
+
+        // Render ABC Notation
+        function renderScore(abcCode) {
+            if (!abcCode || !abcCode.trim()) return;
+
+            stopPlay();
+            currentMode = 'abc';
+            pageList = [];
+            abcNotation = abcCode;
+
+            dropZone.classList.add('hidden');
+            paper.classList.remove('hidden');
+            paper.innerHTML = '';
+
+            visualObj = ABCJS.renderAbc('paper', abcNotation, {
+                responsive: 'resize',
+                add_classes: true,
+                paddingtop: 10,
+                paddingbottom: 20,
+                paddingright: 10,
+                paddingleft: 10,
+                scale: 1.05
+            })[0];
+
+            if (visualObj && visualObj.metaText && visualObj.metaText.tempo) {
+                const bpm = visualObj.metaText.tempo.bpm;
+                if (bpm) {
+                    currentBpm = bpm;
+                    tempoSlider.value = bpm;
+                    bpmDisplay.textContent = `${bpm} BPM`;
+                }
+            }
+
+            btnPlay.disabled = false;
+            btnStop.disabled = false;
+            btnRearrange.disabled = true;
+
+            setupAudio();
+        }
+
+        // Render Document/Pages Display
+        function renderPageList() {
+            stopPlay();
+            currentMode = 'paged';
+            dropZone.classList.add('hidden');
+            paper.classList.remove('hidden');
+            paper.innerHTML = '';
+
+            btnPlay.disabled = true;
+            btnStop.disabled = true;
+            btnRearrange.disabled = pageList.length === 0;
+
+            pageList.forEach((page, idx) => {
+                const pageCard = document.createElement('div');
+                pageCard.className = "w-full max-w-4xl bg-white shadow-md rounded-lg overflow-hidden border border-slate-100 flex flex-col items-center relative group";
+
+                const badge = document.createElement('div');
+                badge.className = "absolute top-3 left-3 bg-slate-900/70 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm shadow";
+                badge.textContent = `Page ${idx + 1}`;
+
+                if (page.type === 'image') {
+                    const img = document.createElement('img');
+                    img.src = page.dataUrl;
+                    img.className = "w-full h-auto object-contain block";
+                    pageCard.appendChild(img);
+                } else if (page.type === 'pdf') {
+                    pageCard.appendChild(page.element);
+                }
+
+                pageCard.appendChild(badge);
+                paper.appendChild(pageCard);
+            });
+        }
+
+        // Initialize Synth Controller
+        function setupAudio() {
+            if (!ABCJS.synth.supportsAudio()) {
+                console.warn('Audio is not supported in this browser.');
+                return;
+            }
+
+            synthControl = new ABCJS.synth.SynthController();
+            synthControl.load('#audio-player', {
+                displayLoop: false,
+                displayRestart: false,
+                displayPlay: false,
+                displayProgress: false
+            });
+
+            const createSynth = new ABCJS.synth.CreateSynth();
+            createSynth.init({
+                visualObj: visualObj,
+                options: {
+                    midiBuffer: true,
+                    bpm: currentBpm,
+                    pan: [0]
+                }
+            }).then(() => {
+                synthControl.setTune(visualObj, false, {
+                    bpm: currentBpm
+                }).catch(err => console.error('Error setting tune:', err));
+            });
+        }
+
+        // Play / Pause Audio
+        function togglePlay() {
+            if (!visualObj || currentMode !== 'abc') return;
+
+            if (isPlaying) {
+                ABCJS.synth.stop();
+                if (timingCallbacks) timingCallbacks.stop();
+                isPlaying = false;
+                playIcon.setAttribute('data-lucide', 'play');
+                lucide.createIcons();
+            } else {
+                timingCallbacks = new ABCJS.TimingCallbacks(visualObj, {
+                    eventCallback: function (ev) {
+                        if (ev === null) {
+                            isPlaying = false;
+                            playIcon.setAttribute('data-lucide', 'play');
+                            lucide.createIcons();
+                            clearHighlights();
+                            return;
+                        }
+                        
+                        clearHighlights();
+
+                        if (ev.elements) {
+                            ev.elements.forEach(elemArray => {
+                                elemArray.forEach(elem => {
+                                    elem.classList.add('abcjs-highlight');
+                                });
+                            });
+                        }
+                    },
+                    bpm: currentBpm
+                });
+
+                ABCJS.synth.play().then(() => {
+                    timingCallbacks.start();
+                    isPlaying = true;
+                    playIcon.setAttribute('data-lucide', 'pause');
+                    lucide.createIcons();
+                }).catch(err => {
+                    console.error('Playback error:', err);
+                });
+            }
+        }
+
+        function stopPlay() {
+            if (currentMode === 'abc') ABCJS.synth.stop();
+            if (timingCallbacks) timingCallbacks.stop();
+            isPlaying = false;
+            playIcon.setAttribute('data-lucide', 'play');
+            lucide.createIcons();
+            clearHighlights();
+        }
+
+        function clearHighlights() {
+            const highlighted = document.querySelectorAll('.abcjs-highlight');
+            highlighted.forEach(el => el.classList.remove('abcjs-highlight'));
+        }
+
+        function clearScore() {
+            stopPlay();
+            visualObj = null;
+            abcNotation = '';
+            pageList = [];
+            currentMode = 'empty';
+            paper.innerHTML = '';
+            paper.classList.add('hidden');
+            dropZone.classList.remove('hidden');
+            btnPlay.disabled = true;
+            btnStop.disabled = true;
+            btnRearrange.disabled = true;
+        }
+
+        // Unified File Handler
+        async function handleFiles(files) {
+            if (!files || files.length === 0) return;
+
+            const fileListArray = Array.from(files);
+            const firstFile = fileListArray[0];
+            const ext = firstFile.name.split('.').pop().toLowerCase();
+
+            // Text/ABC Files
+            if (ext === 'abc' || (ext === 'txt' && fileListArray.length === 1)) {
+                const reader = new FileReader();
+                reader.onload = (e) => renderScore(e.target.result);
+                reader.readAsText(firstFile);
+                return;
+            }
+
+            // MusicXML Files
+            if (ext === 'xml' || ext === 'musicxml') {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const abcCode = convertMusicXmlToAbc(e.target.result);
+                    renderScore(abcCode);
+                };
+                reader.readAsText(firstFile);
+                return;
+            }
+
+            // PDF Files
+            if (ext === 'pdf') {
+                const arrayBuffer = await firstFile.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                pageList = [];
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 1.8 });
+                    
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    canvas.className = "w-full h-auto block";
+
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+                    
+                    pageList.push({
+                        id: 'page-' + Date.now() + '-' + pageNum,
+                        type: 'pdf',
+                        element: canvas,
+                        dataUrl: canvas.toDataURL()
+                    });
+                }
+                renderPageList();
+                return;
+            }
+
+            // Image Files
+            const imagePromises = fileListArray.filter(f => f.type.startsWith('image/')).map(file => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        resolve({
+                            id: 'img-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+                            type: 'image',
+                            dataUrl: e.target.result
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            if (imagePromises.length > 0) {
+                const loadedImages = await Promise.all(imagePromises);
+                if (currentMode === 'paged') {
+                    pageList = pageList.concat(loadedImages);
+                } else {
+                    pageList = loadedImages;
+                }
+                renderPageList();
+            }
+        }
+
+        // Robust Camera Handling for GitHub Pages
+        async function openCamera() {
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                alert("Camera access requires HTTPS. Please access this app via GitHub Pages (HTTPS) or localhost.");
+                return;
+            }
+
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                };
+
+                cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+                cameraVideo.srcObject = cameraStream;
+                await cameraVideo.play();
+                cameraModal.classList.remove('hidden');
+            } catch (err) {
+                console.warn("Primary camera request failed, trying fallback:", err);
+                try {
+                    // Fallback constraint if environment mode is rejected
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    cameraVideo.srcObject = cameraStream;
+                    await cameraVideo.play();
+                    cameraModal.classList.remove('hidden');
+                } catch (fallbackErr) {
+                    alert("Unable to access camera. Please check camera permissions in your browser settings.");
+                    console.error("Camera access error:", fallbackErr);
+                }
+            }
+        }
+
+        function closeCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            cameraModal.classList.add('hidden');
+        }
+
+        function captureCameraPage() {
+            if (!cameraStream) return;
+            
+            cameraCanvas.width = cameraVideo.videoWidth || 1280;
+            cameraCanvas.height = cameraVideo.videoHeight || 720;
+            const ctx = cameraCanvas.getContext('2d');
+            ctx.drawImage(cameraVideo, 0, 0, cameraCanvas.width, cameraCanvas.height);
+
+            const capturedDataUrl = cameraCanvas.toDataURL('image/jpeg', 0.92);
+            
+            const newPage = {
+                id: 'scan-' + Date.now(),
+                type: 'image',
+                dataUrl: capturedDataUrl
+            };
+
+            if (currentMode === 'paged') {
+                pageList.push(newPage);
+            } else {
+                pageList = [newPage];
+            }
+
+            closeCamera();
+            renderPageList();
+        }
+
+        // Page Rearranging
+        function openRearrangeModal() {
+            if (pageList.length === 0) return;
+            
+            pageGrid.innerHTML = '';
+            pageList.forEach((page, index) => {
+                const tile = document.createElement('div');
+                tile.className = "bg-slate-800 rounded-xl p-2 border border-slate-700 flex flex-col items-center relative group cursor-grab active:cursor-grabbing shadow-sm";
+                tile.dataset.id = page.id;
+
+                const img = document.createElement('img');
+                img.src = page.dataUrl;
+                img.className = "w-full h-32 object-contain rounded bg-white mb-2 pointer-events-none";
+
+                const footer = document.createElement('div');
+                footer.className = "w-full flex items-center justify-between text-xs text-slate-300 px-1";
+                footer.innerHTML = `
+                    <span class="font-bold text-[11px] text-slate-400">#${index + 1}</span>
+                    <div class="flex items-center gap-1">
+                        <button class="btn-move-left p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded" title="Move Left/Up">
+                            <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button class="btn-move-right p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded" title="Move Right/Down">
+                            <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button class="btn-delete-page p-1 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded" title="Delete Page">
+                            <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+
+                tile.appendChild(img);
+                tile.appendChild(footer);
+                pageGrid.appendChild(tile);
+
+                footer.querySelector('.btn-move-left').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (tile.previousElementSibling) {
+                        pageGrid.insertBefore(tile, tile.previousElementSibling);
+                        updateTileIndexes();
+                    }
+                });
+
+                footer.querySelector('.btn-move-right').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (tile.nextElementSibling) {
+                        pageGrid.insertBefore(tile.nextElementSibling, tile);
+                        updateTileIndexes();
+                    }
+                });
+
+                footer.querySelector('.btn-delete-page').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    tile.remove();
+                    updateTileIndexes();
+                });
+            });
+
+            lucide.createIcons();
+
+            if (sortableInstance) sortableInstance.destroy();
+            sortableInstance = new Sortable(pageGrid, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: updateTileIndexes
+            });
+
+            rearrangeModal.classList.remove('hidden');
+        }
+
+        function updateTileIndexes() {
+            const tiles = pageGrid.querySelectorAll('[data-id]');
+            tiles.forEach((tile, idx) => {
+                const indexSpan = tile.querySelector('span');
+                if (indexSpan) indexSpan.textContent = `#${idx + 1}`;
+            });
+        }
+
+        function saveRearrangedPages() {
+            const tiles = pageGrid.querySelectorAll('[data-id]');
+            const newOrderedList = [];
+            
+            tiles.forEach(tile => {
+                const id = tile.dataset.id;
+                const foundPage = pageList.find(p => p.id === id);
+                if (foundPage) newOrderedList.push(foundPage);
+            });
+
+            pageList = newOrderedList;
+            rearrangeModal.classList.add('hidden');
+            if (pageList.length > 0) {
+                renderPageList();
+            } else {
+                clearScore();
+            }
+        }
+
+        // Zoom Handling
+        function updateZoom() {
+            paperWrapper.style.transform = `scale(${currentScale})`;
+            zoomDisplay.textContent = `${Math.round(currentScale * 100)}%`;
+        }
+
+        // Event Listeners
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFiles(e.target.files);
+        });
+
+        btnBrowseFile.addEventListener('click', () => fileInput.click());
+        btnCamera.addEventListener('click', openCamera);
+        btnDropZoneCamera.addEventListener('click', openCamera);
+        btnCloseCamera.addEventListener('click', closeCamera);
+        btnCapture.addEventListener('click', captureCameraPage);
+
+        btnRearrange.addEventListener('click', openRearrangeModal);
+        btnCloseRearrange.addEventListener('click', () => rearrangeModal.classList.add('hidden'));
+        btnCancelRearrange.addEventListener('click', () => rearrangeModal.classList.add('hidden'));
+        btnApplyRearrange.addEventListener('click', saveRearrangedPages);
+
+        // Drag & Drop
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+
+        // Controls
+        btnPlay.addEventListener('click', togglePlay);
+        btnStop.addEventListener('click', stopPlay);
+        btnClear.addEventListener('click', clearScore);
+
+        tempoSlider.addEventListener('input', (e) => {
+            currentBpm = parseInt(e.target.value, 10);
+            bpmDisplay.textContent = `${currentBpm} BPM`;
+            if (visualObj && currentMode === 'abc') setupAudio();
+        });
+
+        btnZoomIn.addEventListener('click', () => {
+            if (currentScale < 1.8) {
+                currentScale += 0.1;
+                updateZoom();
+            }
+        });
+
+        btnZoomOut.addEventListener('click', () => {
+            if (currentScale > 0.5) {
+                currentScale -= 0.1;
+                updateZoom();
+            }
+        });
+
+        btnFit.addEventListener('click', () => {
+            currentScale = 1.0;
+            updateZoom();
+        });
+
+        // Window Resize Re-render
+        window.addEventListener('resize', () => {
+            if (abcNotation && visualObj && currentMode === 'abc') {
+                renderScore(abcNotation);
+            }
+        });
+    </script>
+</body>
+</html>
