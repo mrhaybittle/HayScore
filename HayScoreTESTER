@@ -24,14 +24,14 @@
             height: 8px;
         }
         .osmd-scroll::-webkit-scrollbar-track {
-            background: #18181b; 
+            background: #18181b;
         }
         .osmd-scroll::-webkit-scrollbar-thumb {
-            background: #3f3f46; 
+            background: #3f3f46;
             border-radius: 4px;
         }
         .osmd-scroll::-webkit-scrollbar-thumb:hover {
-            background: #dc2626; 
+            background: #dc2626;
         }
         .hidden-view {
             display: none !important;
@@ -50,10 +50,10 @@
         }
 
         /* --- Light / Paper Mode Overrides --- */
-        body.light-mode #view-host, 
-        body.light-mode #view-student, 
-        body.light-mode #osmd-host-wrapper, 
-        body.light-mode #osmd-student-wrapper, 
+        body.light-mode #view-host,
+        body.light-mode #view-student,
+        body.light-mode #osmd-host-wrapper,
+        body.light-mode #osmd-student-wrapper,
         body.light-mode #student-placeholder {
             background-color: #ffffff !important;
         }
@@ -76,7 +76,8 @@
         body.light-mode header .bg-zinc-950,
         body.light-mode header .bg-zinc-900,
         body.light-mode #host-roster-sidebar,
-        body.light-mode #host-mixer-sidebar {
+        body.light-mode #host-mixer-sidebar,
+        body.light-mode #host-media-sidebar {
             background-color: #ffffff !important;
             border-color: #d4d4d8 !important;
         }
@@ -111,8 +112,8 @@
             color: #ffffff !important;
         }
         body.light-mode header button.bg-green-600\/20 {
-            background-color: #dcfce7 !important; 
-            color: #166534 !important; 
+            background-color: #dcfce7 !important;
+            color: #166534 !important;
         }
         body.light-mode .measure-highlight-box {
             mix-blend-mode: multiply !important;
@@ -178,7 +179,6 @@
                 </button>
                 <h2 class="text-xl font-bold text-zinc-100 hidden lg:block">Conductor</h2>
                 
-                <!-- MOVED BAR DISPLAY TO LEFT SIDE -->
                 <div class="bg-zinc-950 px-4 py-1.5 rounded-xl border border-zinc-800 shadow-md flex items-center">
                     <span id="host-bar-display" class="text-xl sm:text-2xl font-bold text-white tracking-wide font-mono drop-shadow-md relative">
                         Bar: 1
@@ -205,6 +205,11 @@
                     <i class="fa-solid fa-sun theme-toggle-icon"></i>
                 </button>
 
+                <!-- Media Sync Toggle Button -->
+                <button id="btn-media-sync" onclick="toggleMediaSidebar()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Sync Audio / YouTube Video">
+                    <i class="fa-brands fa-youtube text-red-500"></i> <span class="hidden xl:inline">Sync Media</span>
+                </button>
+
                 <!-- Advanced Host Controls with Rewind to Start -->
                 <div class="hidden md:flex items-center gap-1 bg-black px-2 py-1.5 rounded-lg border border-zinc-700 shadow-inner">
                     <button id="btn-rewind" onclick="rewindToStart()" class="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition text-amber-400 hover:text-amber-300 mr-1" title="Rewind to Start (Key: ,)">
@@ -222,7 +227,7 @@
                 </div>
 
                 <!-- Mixer Toggle Button -->
-                <button id="btn-mixer" onclick="toggleMixer()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Audio Mixer (Mute/Solo/Drums/Sync)">
+                <button id="btn-mixer" onclick="toggleMixer()" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm font-bold transition flex items-center gap-2 text-zinc-300 hover:text-white" title="Audio Mixer">
                     <i class="fa-solid fa-sliders text-amber-500"></i> <span class="hidden xl:inline">Mixer</span>
                 </button>
                                 
@@ -271,6 +276,126 @@
             <div id="osmd-host-wrapper" class="hidden-view flex-1 overflow-auto osmd-scroll relative p-4 bg-zinc-950">
                 <div id="host-highlight-box" class="measure-highlight-box hidden-view"></div>
                 <div id="osmd-host-container" class="w-full min-h-full cursor-pointer relative"></div>
+            </div>
+
+            <!-- MEDIA & YOUTUBE SYNC SIDEBAR -->
+            <div id="host-media-sidebar" class="hidden-view w-96 bg-zinc-900 border-l border-zinc-800 flex flex-col h-full shadow-2xl z-20 transition-all osmd-scroll overflow-y-auto">
+                <div class="p-4 border-b border-zinc-800 flex justify-between items-center bg-black/40">
+                    <h3 class="font-bold text-zinc-100 flex items-center gap-2">
+                        <i class="fa-solid fa-tower-broadcast text-red-500"></i> Audio & Video Sync
+                    </h3>
+                    <button onclick="toggleMediaSidebar()" class="text-zinc-400 hover:text-white transition p-1"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="p-4 space-y-4">
+                    <!-- Source Selector -->
+                    <div>
+                        <label class="text-xs font-semibold text-zinc-400 block mb-1 uppercase tracking-wide">Sync Source</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="tab-src-audio" onclick="selectSyncMode('audio')" class="py-2 px-3 text-xs font-bold rounded-lg border border-red-600 bg-red-600/20 text-red-400 flex items-center justify-center gap-2 transition">
+                                <i class="fa-solid fa-file-audio"></i> Audio File
+                            </button>
+                            <button id="tab-src-youtube" onclick="selectSyncMode('youtube')" class="py-2 px-3 text-xs font-bold rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-400 flex items-center justify-center gap-2 transition">
+                                <i class="fa-brands fa-youtube text-red-500"></i> YouTube
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Audio File Import Section -->
+                    <div id="panel-audio-source" class="space-y-2">
+                        <div class="flex gap-2">
+                            <input type="file" id="media-audio-input" accept="audio/*" class="hidden" onchange="loadMediaAudioFile(this.files)">
+                            <button onclick="document.getElementById('media-audio-input').click()" class="flex-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition">
+                                <i class="fa-solid fa-upload"></i> Import MP3 / Audio
+                            </button>
+                            <button id="btn-detect-tempo" onclick="autoDetectAudioTempo()" class="bg-red-950 hover:bg-red-900 border border-red-800 text-red-300 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1.5 transition" title="Auto-detect BPM from imported audio">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Detect BPM
+                            </button>
+                        </div>
+                        <div id="media-audio-filename" class="text-[11px] text-zinc-500 truncate font-mono">No audio loaded</div>
+                        <audio id="sync-audio-element" class="hidden"></audio>
+                    </div>
+
+                    <!-- YouTube Section -->
+                    <div id="panel-youtube-source" class="hidden-view space-y-2">
+                        <div class="flex gap-1.5">
+                            <input type="text" id="youtube-url-input" placeholder="Paste YouTube link or ID..." class="flex-1 bg-black border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 outline-none font-mono">
+                            <button onclick="loadYouTubeVideo()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">Load</button>
+                        </div>
+                        <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-zinc-800">
+                            <div id="youtube-player-frame"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tempo / BPM Auto-Detection & Web Search Tool -->
+                    <div class="p-3 bg-zinc-950/60 rounded-xl border border-zinc-800 space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-zinc-400 font-semibold"><i class="fa-solid fa-gauge mr-1 text-amber-500"></i> Detected Tempo</span>
+                            <span id="detected-bpm-display" class="font-mono text-zinc-300">-- BPM</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="applyDetectedBpm()" id="btn-apply-detected-bpm" class="flex-1 opacity-50 pointer-events-none bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 text-[11px] font-bold py-1.5 rounded-lg transition">
+                                Apply to Score
+                            </button>
+                            <button onclick="searchTempoOnline()" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition" title="Lookup song BPM online">
+                                <i class="fa-solid fa-globe mr-1 text-blue-400"></i> Lookup
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Fine-Tuning Controls -->
+                    <div class="p-3 bg-zinc-950/60 rounded-xl border border-zinc-800 space-y-3">
+                        <div class="text-xs font-bold text-zinc-300 uppercase tracking-wide border-b border-zinc-800/80 pb-1 flex items-center justify-between">
+                            <span><i class="fa-solid fa-sliders mr-1 text-red-500"></i> Synchronization Trim</span>
+                            <button onclick="resetSyncOffsets()" class="text-[10px] text-zinc-500 hover:text-zinc-300">Reset</button>
+                        </div>
+
+                        <!-- Audio Start Offset -->
+                        <div>
+                            <div class="flex justify-between text-xs text-zinc-400 mb-1">
+                                <span>Audio Start Offset</span>
+                                <span id="sync-start-label" class="font-mono text-zinc-200">0.00s</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="range" id="sync-start-slider" min="0" max="60" step="0.05" value="0" oninput="updateSyncStartOffset(this.value)" class="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-red-500">
+                                <button onclick="setSyncStartToCurrentTime()" class="text-[10px] bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded text-zinc-300 border border-zinc-700" title="Set start to current player position">Mark Bar 1</button>
+                            </div>
+                        </div>
+
+                        <!-- Fine Delay Offset (+/- ms) -->
+                        <div>
+                            <div class="flex justify-between text-xs text-zinc-400 mb-1">
+                                <span>Fine Nudge (Latency Trim)</span>
+                                <span id="sync-fine-label" class="font-mono text-zinc-200">0 ms</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="nudgeSyncOffset(-25)" class="w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[10px] font-mono text-zinc-300">-25</button>
+                                <input type="range" id="sync-fine-slider" min="-1000" max="1000" step="10" value="0" oninput="updateSyncFineOffset(this.value)" class="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
+                                <button onclick="nudgeSyncOffset(25)" class="w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[10px] font-mono text-zinc-300">+25</button>
+                            </div>
+                        </div>
+
+                        <!-- Playback Rate / Speed Scaling -->
+                        <div>
+                            <div class="flex justify-between text-xs text-zinc-400 mb-1">
+                                <span>Playback Rate</span>
+                                <span id="sync-rate-label" class="font-mono text-zinc-200">1.00x</span>
+                            </div>
+                            <input type="range" id="sync-rate-slider" min="0.5" max="1.5" step="0.05" value="1.0" oninput="updateSyncPlaybackRate(this.value)" class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-green-500">
+                        </div>
+                    </div>
+
+                    <!-- Transport Toolbar for Synced Media -->
+                    <div class="flex items-center justify-between p-2 bg-zinc-950 rounded-xl border border-zinc-800">
+                        <button onclick="seekSyncMediaToMeasure(1)" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs transition" title="Rewind Media to Bar 1">
+                            <i class="fa-solid fa-backward-step"></i>
+                        </button>
+                        <button id="btn-sync-media-play" onclick="toggleSyncMediaPlayback()" class="px-5 py-1.5 rounded-lg bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white font-bold text-xs flex items-center gap-2 transition">
+                            <i class="fa-solid fa-play"></i> Play Along
+                        </button>
+                        <span id="sync-media-timecode" class="text-xs font-mono text-zinc-400">00:00.0</span>
+                    </div>
+                </div>
             </div>
 
             <!-- HOST AUDIO MIXER SIDEBAR -->
@@ -329,21 +454,17 @@
 
     <!-- STUDENT VIEW -->
     <div id="view-student" class="hidden-view flex-1 flex flex-col h-full bg-zinc-950 relative">
-            
-        <!-- Focus Mode Overlay -->
         <div id="focus-overlay" class="hidden-view absolute inset-0 z-[100] backdrop-blur-xl bg-black/70 flex flex-col items-center justify-center transition-all duration-300">
             <i class="fa-solid fa-eye text-9xl text-red-600 mb-8 animate-pulse drop-shadow-[0_0_25px_rgba(220,38,38,0.8)]"></i>
             <h2 class="text-5xl sm:text-6xl font-black text-white tracking-widest uppercase shadow-black drop-shadow-2xl text-center px-4">Eyes on Conductor</h2>
             <p class="text-zinc-400 mt-4 text-xl font-medium">Please stop playing and look up.</p>
         </div>
 
-        <!-- Broadcast Overlay -->
         <div id="broadcast-overlay" class="hidden-view absolute inset-0 z-[110] backdrop-blur-xl bg-blue-900/80 flex flex-col items-center justify-center transition-all duration-300">
             <i class="fa-solid fa-bullhorn text-7xl text-blue-300 mb-6 animate-bounce drop-shadow-lg"></i>
             <h2 id="broadcast-text" class="text-6xl sm:text-7xl font-black text-white tracking-wide shadow-black drop-shadow-2xl text-center px-4 leading-tight uppercase">MESSAGE</h2>
         </div>
 
-        <!-- Built-in Tuner Overlay -->
         <div id="tuner-overlay" class="hidden-view absolute top-20 right-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-xl p-4 z-[60] flex flex-col items-center min-w-[120px] transition-all cursor-move">
             <div class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1">Tuner</div>
             <div id="tuner-note" class="text-4xl font-black text-red-500 mb-1">-</div>
@@ -358,9 +479,7 @@
                 <button onclick="switchView('home')" class="p-2 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg transition">
                     <i class="fa-solid fa-arrow-left"></i>
                 </button>
-                                
-                <button onclick="openAvatarModal()" id="btn-avatar" class="text-xl bg-zinc-800 hover:bg-zinc-700 w-10 h-10 rounded-lg flex items-center justify-center transition shadow-md border border-zinc-700" title="Choose Avatar">👤</button>
-
+                <button onclick="openAvatarModal()" id="btn-avatar" class="text-xl bg-zinc-800 hover:bg-zinc-700 w-10 h-10 rounded-lg flex items-center justify-center transition shadow-md border border-zinc-700" title="Choose Avatar"></button>
                 <div class="flex bg-black border border-zinc-700 rounded-lg overflow-hidden flex-1 sm:flex-none">
                     <input type="text" id="join-code-input" placeholder="WORD" class="bg-transparent text-white placeholder-zinc-600 px-4 py-2 outline-none w-32 font-mono font-bold tracking-widest uppercase text-center" maxlength="5">
                     <button onclick="joinRehearsal()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 font-bold transition">Join</button>
@@ -375,7 +494,6 @@
             </div>
 
             <div id="student-controls" class="flex flex-wrap items-center justify-center lg:justify-end gap-2 w-full lg:w-auto opacity-50 pointer-events-none transition-opacity">
-                                
                 <div class="relative flex-1 sm:flex-none max-w-[180px]">
                     <select id="part-selector" onchange="selectPart(this.value)" class="appearance-none w-full bg-zinc-800 border-2 border-zinc-700 text-white px-3 py-2 pr-8 rounded-lg outline-none font-medium shadow-sm transition cursor-pointer text-sm">
                         <option value="" disabled selected>Select Part...</option>
@@ -431,11 +549,9 @@
         </header>
 
         <div class="flex-1 overflow-auto p-4 bg-zinc-950 flex items-center justify-center relative z-0" id="student-placeholder">
-            <!-- Hint Arrow -->
             <div class="absolute top-12 left-12 lg:left-32 flex flex-col items-center animate-bounce text-red-600 drop-shadow-md z-20">
                 <i class="fa-solid fa-arrow-up-long text-7xl"></i>
             </div>
-
             <div class="text-center text-zinc-600">
                 <i class="fa-solid fa-music text-8xl mb-6 opacity-20"></i>
                 <p class="text-xl font-medium">Enter a room <span class="underline decoration-red-600 decoration-4 underline-offset-4 text-zinc-300 font-bold">word code</span> to sync with the conductor.</p>
@@ -453,9 +569,7 @@
         <div class="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-sm flex flex-col p-6 relative shadow-2xl">
             <button onclick="closeAvatarModal()" class="absolute top-4 right-4 text-zinc-400 hover:text-white transition"><i class="fa-solid fa-xmark text-xl"></i></button>
             <h2 class="text-xl font-bold mb-4 text-white">Choose Avatar</h2>
-            <div id="avatar-grid" class="grid grid-cols-5 gap-3 text-3xl justify-items-center">
-                <!-- populated by js -->
-            </div>
+            <div id="avatar-grid" class="grid grid-cols-5 gap-3 text-3xl justify-items-center"></div>
         </div>
     </div>
 
@@ -466,9 +580,7 @@
             <h2 class="text-2xl font-bold mb-1 text-white flex items-center gap-3"><i class="fa-brands fa-google-drive text-green-500 text-3xl"></i> HayScore Cloud Library</h2>
             <p id="drive-folder-title" class="text-red-400 font-mono text-xs mb-4 border-b border-zinc-800 pb-3 flex items-center gap-2"><i class="fa-solid fa-folder-open"></i> Root Folder</p>
                         
-            <div id="drive-file-list" class="flex-1 overflow-auto bg-zinc-950 rounded-lg p-2 border border-zinc-800 space-y-2 osmd-scroll">
-                <!-- Files & Subfolders populate here via JS -->
-            </div>
+            <div id="drive-file-list" class="flex-1 overflow-auto bg-zinc-950 rounded-lg p-2 border border-zinc-800 space-y-2 osmd-scroll"></div>
         </div>
     </div>
 
@@ -480,7 +592,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.23.0 • Synced Metronome & Top-Left Conductor Notifications</div>
+        <div>v2.24.0 • Dual Audio & YouTube Sync with Auto-BPM Detection</div>
     </footer>
 
     <script type="module">
@@ -514,7 +626,7 @@
         }
 
         const HAY_SCORE_FOLDER_ID = "12QYBAl7PE_nIK-02hQNgA-tKUCQbCnUi";
-        const GOOGLE_API_KEY = firebaseConfig.apiKey; 
+        const GOOGLE_API_KEY = firebaseConfig.apiKey;
 
         let currentFolderId = HAY_SCORE_FOLDER_ID;
         let folderHistory = [{ id: HAY_SCORE_FOLDER_ID, name: "Root Folder" }];
@@ -523,60 +635,52 @@
         let osmdHost = null;
         let osmdStudent = null;
         let roomCode = "";
-        let currentXmlData = null; 
+        let currentXmlData = null;
         let isLightMode = false;
         let isTabMode = false;
 
-        // Rehearsal & Sync States
         let currentMeasureNumber = 1;
         let autoScrollEnabled = true;
         let currentStudentTranspose = 0;
         let currentStudentKeyTranspose = 0;
         let totalMeasuresCache = 0;
+        let songWorkTitle = "";
 
-        // Student Lookahead / Advance Sync Lead (in milliseconds)
-        let studentLeadMs = 250; 
+        let studentLeadMs = 250;
         let lastBroadcastStudentMeasure = 0;
 
-        let hostRehearsalMarks = {}; 
-        let hostRepeatMarks = []; 
+        let hostRehearsalMarks = {};
+        let hostRepeatMarks = [];
 
-        // Metronome & Playback States
         let focusActive = false;
         let metronomeActive = false;
         let playbackActive = false;
         let bpm = 100;
         let metroInterval = null;
 
-        // Number Typing Jump State
         let numberBuffer = "";
         let numberBufferTimeout = null;
 
-        // Time Signature state
         let currentTimeSignature = { num: 4, den: 4 };
 
-        // Zoom 
         let hostZoom = 1.0;
         let studentZoom = 1.0;
 
-        // Built-in Tuner
         let tunerActive = false;
         let audioContext = null;
         let analyser = null;
         let microphone = null;
         let tunerRafId = null;
 
-        // Web Audio Context for Lag-Free Playback & Hardware Clock
         let audioCtx = null;
         let nextBeatTime = 0.0;
         let schedulerTimerId = null;
 
-        // --- WEB AUDIO SCORE SYNTHESIZER & REAL-TIME AUDIO GRAPH ---
         let scoreEvents = [];
         let measureStartBeats = {};
-        let trackMixerStates = {}; 
-        let trackGainNodes = {};   
-        let masterGainNode = null; 
+        let trackMixerStates = {};
+        let trackGainNodes = {};  
+        let masterGainNode = null;
         let masterMixerVolume = 1.0;
 
         let playbackStartTime = 0;
@@ -584,6 +688,421 @@
         let playbackNextEventIdx = 0;
         let playbackRafId = null;
 
+        // ==========================================
+        // --- AUDIO / YOUTUBE SYNC ENGINE STATE ---
+        // ==========================================
+        let syncSourceMode = 'audio'; // 'audio' or 'youtube'
+        let importedAudioBuffer = null;
+        let syncStartOffsetSec = 0.0;
+        let syncFineOffsetMs = 0;
+        let syncPlaybackRate = 1.0;
+        let isSyncMediaPlaying = false;
+        let syncMediaRafId = null;
+        let detectedTempo = null;
+
+        // YouTube API Iframe player
+        let ytPlayer = null;
+        let isYtApiReady = false;
+
+        function initYouTubeApi() {
+            if (window.YT && window.YT.Player) {
+                isYtApiReady = true;
+                return;
+            }
+            const tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+            window.onYouTubeIframeAPIReady = () => {
+                isYtApiReady = true;
+            };
+        }
+        initYouTubeApi();
+
+        window.toggleMediaSidebar = function() {
+            const sidebar = document.getElementById('host-media-sidebar');
+            if (sidebar) sidebar.classList.toggle('hidden-view');
+        };
+
+        window.selectSyncMode = function(mode) {
+            syncSourceMode = mode;
+            const btnAudio = document.getElementById('tab-src-audio');
+            const btnYt = document.getElementById('tab-src-youtube');
+            const panelAudio = document.getElementById('panel-audio-source');
+            const panelYt = document.getElementById('panel-youtube-source');
+
+            if (mode === 'audio') {
+                btnAudio.className = "py-2 px-3 text-xs font-bold rounded-lg border border-red-600 bg-red-600/20 text-red-400 flex items-center justify-center gap-2 transition";
+                btnYt.className = "py-2 px-3 text-xs font-bold rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-400 flex items-center justify-center gap-2 transition";
+                panelAudio.classList.remove('hidden-view');
+                panelYt.classList.add('hidden-view');
+            } else {
+                btnYt.className = "py-2 px-3 text-xs font-bold rounded-lg border border-red-600 bg-red-600/20 text-red-400 flex items-center justify-center gap-2 transition";
+                btnAudio.className = "py-2 px-3 text-xs font-bold rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-400 flex items-center justify-center gap-2 transition";
+                panelYt.classList.remove('hidden-view');
+                panelAudio.classList.add('hidden-view');
+            }
+        };
+
+        window.loadMediaAudioFile = async function(files) {
+            if (!files || files.length === 0) return;
+            const file = files[0];
+            const audioEl = document.getElementById('sync-audio-element');
+            const nameEl = document.getElementById('media-audio-filename');
+            
+            if (nameEl) nameEl.innerText = file.name;
+            audioEl.src = URL.createObjectURL(file);
+            audioEl.playbackRate = syncPlaybackRate;
+
+            showToast(`Loaded audio: ${file.name}`, 'info');
+
+            // Read arrayBuffer for fast client-side beat detection
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const ctx = getAudioContext();
+                try {
+                    importedAudioBuffer = await ctx.decodeAudioData(e.target.result);
+                    showToast('Audio decoded. Auto-detecting BPM...', 'info');
+                    autoDetectAudioTempo();
+                } catch(err) {
+                    console.warn("Audio buffer decode error:", err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        function extractYouTubeId(urlOrId) {
+            if (!urlOrId) return "";
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = urlOrId.trim().match(regExp);
+            return (match && match[2].length === 11) ? match[2] : urlOrId.trim();
+        }
+
+        window.loadYouTubeVideo = function() {
+            const input = document.getElementById('youtube-url-input');
+            const videoId = extractYouTubeId(input.value);
+            if (!videoId) {
+                showToast('Please enter a valid YouTube URL or Video ID.', 'error');
+                return;
+            }
+
+            if (!isYtApiReady) {
+                showToast('YouTube player is still initializing. Try again in 2 seconds.', 'info');
+                return;
+            }
+
+            if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+                ytPlayer.loadVideoById(videoId);
+            } else {
+                ytPlayer = new window.YT.Player('youtube-player-frame', {
+                    height: '100%',
+                    width: '100%',
+                    videoId: videoId,
+                    playerVars: {
+                        'playsinline': 1,
+                        'controls': 1,
+                        'rel': 0
+                    },
+                    events: {
+                        'onReady': () => showToast('YouTube video loaded and ready to sync.', 'success')
+                    }
+                });
+            }
+        };
+
+        // --- CLIENT-SIDE WEBAUDIO DSP BEAT & TEMPO ESTIMATOR ---
+        window.autoDetectAudioTempo = async function() {
+            if (!importedAudioBuffer) {
+                showToast('Please import an audio file first.', 'error');
+                return;
+            }
+            showToast('Analyzing transients & rhythm...', 'info');
+
+            try {
+                const detected = await analyzeAudioBufferTempo(importedAudioBuffer);
+                if (detected && detected > 50 && detected < 220) {
+                    detectedTempo = detected;
+                    const disp = document.getElementById('detected-bpm-display');
+                    if (disp) disp.innerText = `${detectedTempo} BPM`;
+                    const btn = document.getElementById('btn-apply-detected-bpm');
+                    if (btn) btn.classList.remove('opacity-50', 'pointer-events-none');
+                    showToast(`BPM Detected: ${detectedTempo} BPM`, 'success');
+                } else {
+                    showToast('Could not reliably calculate BPM. Try Online Lookup.', 'error');
+                }
+            } catch(e) {
+                console.warn("BPM Detection error:", e);
+                showToast('Failed to compute BPM from audio.', 'error');
+            }
+        };
+
+        async function analyzeAudioBufferTempo(audioBuffer) {
+            // Analyze the first 45 seconds using an OfflineAudioContext
+            const duration = Math.min(45, audioBuffer.duration);
+            const sampleRate = 22050; // downsample to speed up FFT/convolution
+            const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, duration * sampleRate, sampleRate);
+
+            const source = offlineCtx.createBufferSource();
+            source.buffer = audioBuffer;
+
+            // Low-pass filter to isolate rhythmic bass/kick drum fundamentals
+            const filter = offlineCtx.createBiquadFilter();
+            filter.type = "lowpass";
+            filter.frequency.setValueAtTime(150, 0);
+
+            source.connect(filter);
+            filter.connect(offlineCtx.destination);
+            source.start(0);
+
+            const rendered = await offlineCtx.startRendering();
+            const data = rendered.getChannelData(0);
+
+            // Calculate RMS energy over 50ms windows
+            const windowSize = Math.floor(sampleRate * 0.05);
+            const energyList = [];
+            for (let i = 0; i < data.length; i += windowSize) {
+                let sum = 0;
+                for (let j = 0; j < windowSize && i + j < data.length; j++) {
+                    sum += data[i + j] * data[i + j];
+                }
+                energyList.push(Math.sqrt(sum / windowSize));
+            }
+
+            // Differentiate / compute onset spikes
+            const onsets = [];
+            for (let i = 1; i < energyList.length; i++) {
+                const diff = energyList[i] - energyList[i - 1];
+                onsets.push(diff > 0 ? diff : 0);
+            }
+
+            // Autocorrelation across common BPM ranges (60 to 190 BPM)
+            const fps = sampleRate / windowSize; // ~20 frames per second
+            let bestBpm = 100;
+            let maxCorr = -1;
+
+            for (let testBpm = 60; testBpm <= 190; testBpm++) {
+                const lag = Math.round((60 / testBpm) * fps);
+                let corr = 0;
+                for (let i = 0; i < onsets.length - lag; i++) {
+                    corr += onsets[i] * onsets[i + lag];
+                }
+                if (corr > maxCorr) {
+                    maxCorr = corr;
+                    bestBpm = testBpm;
+                }
+            }
+
+            return bestBpm;
+        }
+
+        window.applyDetectedBpm = function() {
+            if (!detectedTempo) return;
+            const input = document.getElementById('bpm-input');
+            if (input) {
+                input.value = detectedTempo;
+                updateLiveBpm(detectedTempo);
+                showToast(`Score tempo set to ${detectedTempo} BPM`, 'success');
+            }
+        };
+
+        window.searchTempoOnline = function() {
+            const title = songWorkTitle || "sheet music";
+            const query = encodeURIComponent(`${title} tempo bpm`);
+            const url = `https://www.google.com/search?q=${query}`;
+            window.open(url, '_blank');
+        };
+
+        // --- FINE-TUNING CONTROLS ---
+        window.updateSyncStartOffset = function(val) {
+            syncStartOffsetSec = parseFloat(val) || 0.0;
+            const lbl = document.getElementById('sync-start-label');
+            if (lbl) lbl.innerText = `${syncStartOffsetSec.toFixed(2)}s`;
+        };
+
+        window.setSyncStartToCurrentTime = function() {
+            let t = 0;
+            if (syncSourceMode === 'audio') {
+                const a = document.getElementById('sync-audio-element');
+                if (a) t = a.currentTime;
+            } else if (syncSourceMode === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+                t = ytPlayer.getCurrentTime();
+            }
+            syncStartOffsetSec = Math.max(0, t);
+            const slider = document.getElementById('sync-start-slider');
+            const lbl = document.getElementById('sync-start-label');
+            if (slider) slider.value = syncStartOffsetSec;
+            if (lbl) lbl.innerText = `${syncStartOffsetSec.toFixed(2)}s`;
+            showToast(`Bar 1 synced to timestamp ${syncStartOffsetSec.toFixed(2)}s`, 'info');
+        };
+
+        window.updateSyncFineOffset = function(val) {
+            syncFineOffsetMs = parseInt(val) || 0;
+            const lbl = document.getElementById('sync-fine-label');
+            if (lbl) lbl.innerText = `${syncFineOffsetMs > 0 ? '+' : ''}${syncFineOffsetMs} ms`;
+        };
+
+        window.nudgeSyncOffset = function(amount) {
+            syncFineOffsetMs = Math.max(-1000, Math.min(1000, syncFineOffsetMs + amount));
+            const slider = document.getElementById('sync-fine-slider');
+            const lbl = document.getElementById('sync-fine-label');
+            if (slider) slider.value = syncFineOffsetMs;
+            if (lbl) lbl.innerText = `${syncFineOffsetMs > 0 ? '+' : ''}${syncFineOffsetMs} ms`;
+        };
+
+        window.updateSyncPlaybackRate = function(val) {
+            syncPlaybackRate = parseFloat(val) || 1.0;
+            const lbl = document.getElementById('sync-rate-label');
+            if (lbl) lbl.innerText = `${syncPlaybackRate.toFixed(2)}x`;
+
+            const audioEl = document.getElementById('sync-audio-element');
+            if (audioEl) audioEl.playbackRate = syncPlaybackRate;
+
+            if (ytPlayer && typeof ytPlayer.setPlaybackRate === 'function') {
+                ytPlayer.setPlaybackRate(syncPlaybackRate);
+            }
+        };
+
+        window.resetSyncOffsets = function() {
+            syncStartOffsetSec = 0.0;
+            syncFineOffsetMs = 0;
+            syncPlaybackRate = 1.0;
+
+            const startS = document.getElementById('sync-start-slider');
+            const fineS = document.getElementById('sync-fine-slider');
+            const rateS = document.getElementById('sync-rate-slider');
+
+            if (startS) startS.value = 0;
+            if (fineS) fineS.value = 0;
+            if (rateS) rateS.value = 1.0;
+
+            document.getElementById('sync-start-label').innerText = "0.00s";
+            document.getElementById('sync-fine-label').innerText = "0 ms";
+            document.getElementById('sync-rate-label').innerText = "1.00x";
+
+            updateSyncPlaybackRate(1.0);
+            showToast('Sync offsets reset', 'info');
+        };
+
+        window.toggleSyncMediaPlayback = function() {
+            if (isSyncMediaPlaying) {
+                pauseSyncMedia();
+            } else {
+                playSyncMedia();
+            }
+        };
+
+        function playSyncMedia() {
+            isSyncMediaPlaying = true;
+            const btn = document.getElementById('btn-sync-media-play');
+            if (btn) {
+                btn.className = "px-5 py-1.5 rounded-lg bg-red-600 text-white font-bold text-xs flex items-center gap-2 transition";
+                btn.innerHTML = '<i class="fa-solid fa-pause"></i> Pause';
+            }
+
+            if (syncSourceMode === 'audio') {
+                const a = document.getElementById('sync-audio-element');
+                if (a) {
+                    a.playbackRate = syncPlaybackRate;
+                    a.play();
+                }
+            } else if (syncSourceMode === 'youtube' && ytPlayer && typeof ytPlayer.playVideo === 'function') {
+                ytPlayer.setPlaybackRate(syncPlaybackRate);
+                ytPlayer.playVideo();
+            }
+
+            syncMediaLoop();
+            showToast('Synchronized playback active.', 'success');
+        }
+
+        function pauseSyncMedia() {
+            isSyncMediaPlaying = false;
+            const btn = document.getElementById('btn-sync-media-play');
+            if (btn) {
+                btn.className = "px-5 py-1.5 rounded-lg bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white font-bold text-xs flex items-center gap-2 transition";
+                btn.innerHTML = '<i class="fa-solid fa-play"></i> Play Along';
+            }
+
+            if (syncSourceMode === 'audio') {
+                const a = document.getElementById('sync-audio-element');
+                if (a) a.pause();
+            } else if (syncSourceMode === 'youtube' && ytPlayer && typeof ytPlayer.pauseVideo === 'function') {
+                ytPlayer.pauseVideo();
+            }
+
+            if (syncMediaRafId) cancelAnimationFrame(syncMediaRafId);
+        }
+
+        window.seekSyncMediaToMeasure = function(targetMeasure = 1) {
+            const beatsPerMeasure = (currentTimeSignature && currentTimeSignature.num) ? currentTimeSignature.num : 4;
+            const targetBeat = (measureStartBeats[targetMeasure] !== undefined)
+                ? measureStartBeats[targetMeasure]
+                : (targetMeasure - 1) * beatsPerMeasure;
+
+            const secondsPerBeat = 60.0 / bpm;
+            const scoreTimeSec = targetBeat * secondsPerBeat;
+            const mediaSeekTime = Math.max(0, syncStartOffsetSec + scoreTimeSec + (syncFineOffsetMs / 1000.0));
+
+            if (syncSourceMode === 'audio') {
+                const a = document.getElementById('sync-audio-element');
+                if (a) a.currentTime = mediaSeekTime;
+            } else if (syncSourceMode === 'youtube' && ytPlayer && typeof ytPlayer.seekTo === 'function') {
+                ytPlayer.seekTo(mediaSeekTime, true);
+            }
+            advanceHostMeasure(targetMeasure);
+        };
+
+        // --- Continuous Media-to-Score Sync Loop ---
+        function syncMediaLoop() {
+            if (!isSyncMediaPlaying) return;
+
+            let currentTime = 0;
+            if (syncSourceMode === 'audio') {
+                const a = document.getElementById('sync-audio-element');
+                if (a) currentTime = a.currentTime;
+            } else if (syncSourceMode === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+                currentTime = ytPlayer.getCurrentTime();
+            }
+
+            // Update Timecode Display
+            const tcEl = document.getElementById('sync-media-timecode');
+            if (tcEl) {
+                const mins = Math.floor(currentTime / 60);
+                const secs = (currentTime % 60).toFixed(1).padStart(4, '0');
+                tcEl.innerText = `${mins.toString().padStart(2, '0')}:${secs}`;
+            }
+
+            // Compute relative musical beat from media position
+            const effectiveTime = currentTime - syncStartOffsetSec - (syncFineOffsetMs / 1000.0);
+            if (effectiveTime >= 0) {
+                const secondsPerBeat = (60.0 / bpm);
+                const currentScoreBeat = (effectiveTime * syncPlaybackRate) / secondsPerBeat;
+                const activeMeasure = getMeasureForBeat(currentScoreBeat);
+
+                if (activeMeasure !== currentMeasureNumber && activeMeasure <= totalMeasuresCache && activeMeasure >= 1) {
+                    currentMeasureNumber = activeMeasure;
+                    highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
+                    updateProgressUI();
+                }
+
+                // Student sync broadcast with forward lead
+                const leadSeconds = studentLeadMs / 1000.0;
+                const studentLeadBeats = (leadSeconds * syncPlaybackRate) / secondsPerBeat;
+                const studentTarget = getMeasureForBeat(currentScoreBeat + studentLeadBeats);
+
+                if (studentTarget !== lastBroadcastStudentMeasure && studentTarget <= totalMeasuresCache && studentTarget >= 1) {
+                    lastBroadcastStudentMeasure = studentTarget;
+                    if (isFirebaseActive && roomCode) {
+                        set(ref(db, `rooms/${roomCode}/measure`), studentTarget);
+                    }
+                }
+            }
+
+            syncMediaRafId = requestAnimationFrame(syncMediaLoop);
+        }
+
+        // ==========================================
+        // --- SCORE RENDERING & AUDIO ENGINE ---
+        // ==========================================
         function getAudioContext() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -651,14 +1170,13 @@
             osc.stop(time + 0.04);
         }
 
-        // --- HIGH PITCHED BELL COUNT-IN SYNTHESIZER ---
         function playHighBellSound(time, isAccent = false) {
             const ctx = getAudioContext();
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
 
             osc.type = 'sine';
-            const freq = isAccent ? 2000 : 1500; 
+            const freq = isAccent ? 2000 : 1500;
             osc.frequency.setValueAtTime(freq, time);
 
             gain.gain.setValueAtTime(0, time);
@@ -1112,8 +1630,8 @@
                     updateProgressUI();
                 }
 
-                const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined) 
-                    ? measureStartBeats[currentMeasureNumber] 
+                const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined)
+                    ? measureStartBeats[currentMeasureNumber]
                     : (currentMeasureNumber - 1) * (currentTimeSignature.num || 4);
 
                 playbackStartBeat = targetBeat;
@@ -1210,8 +1728,8 @@
         function checkIsDrumPart(name, partId, xmlDoc) {
             const n = (name || "").toLowerCase();
             const drumKeywords = [
-                'drum', 'drums', 'drumset', 'drum kit', 'percussion', 'snare', 
-                'cymbals', 'hi-hat', 'hihat', 'tom', 'toms', 'batterie', 
+                'drum', 'drums', 'drumset', 'drum kit', 'percussion', 'snare',
+                'cymbals', 'hi-hat', 'hihat', 'tom', 'toms', 'batterie',
                 'schlagzeug', 'timpani', 'tambourine', 'bongo', 'conga', 'percussive'
             ];
             if (drumKeywords.some(kw => n.includes(kw))) return true;
@@ -1356,16 +1874,16 @@
                 const card = document.createElement('div');
                 card.className = `p-3 rounded-xl border transition-all ${isAudible ? 'bg-zinc-800/80 border-zinc-700' : 'bg-zinc-950/40 border-zinc-800/60 opacity-60'}`;
 
-                const muteClass = trk.muted 
-                    ? 'bg-red-600 text-white font-bold border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' 
+                const muteClass = trk.muted
+                    ? 'bg-red-600 text-white font-bold border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'
                     : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700';
 
-                const soloClass = trk.soloed 
-                    ? 'bg-amber-500 text-zinc-950 font-bold border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.5)]' 
+                const soloClass = trk.soloed
+                    ? 'bg-amber-500 text-zinc-950 font-bold border-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.5)]'
                     : 'bg-zinc-800 text-zinc-400 hover:text-white border-zinc-700';
 
-                const drumBadge = trk.isDrum 
-                    ? `<span class="text-[9px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded font-mono font-bold tracking-wide mr-1.5">🥁 DRUMS</span>`
+                const drumBadge = trk.isDrum
+                    ? `<span class="text-[9px] bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded font-mono font-bold tracking-wide mr-1.5">DRUMS</span>`
                     : '';
 
                 const currentShift = trk.octaveShift || 0;
@@ -1423,7 +1941,7 @@
 
         let localStudentName = "Student";
         let localStudentId = null;
-        let localStudentAvatar = localStorage.getItem('hayscore_avatar') || "👤";
+        let localStudentAvatar = localStorage.getItem('hayscore_avatar') || "";
         let localTabSwitches = 0;
 
         const SAFE_WORD_CODES = [
@@ -1433,7 +1951,7 @@
             "SOFT", "WOOD", "BRASS", "BELL", "HARP", "ARCH", "STAR", "BLUE"
         ];
 
-        const EMOJIS = ["🦊","🐱","🐶","🐼","🐨","🦁","🐯","🐸","🐵","🐧","🦉","🦄","🐝","🐛","🦋","🐢","🐙","🦑","crab","rex","👻","👽","🤖","🤠","🤡"];
+        const EMOJIS = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""];
 
         window.openAvatarModal = function() {
             const grid = document.getElementById('avatar-grid');
@@ -1504,21 +2022,21 @@
             });
 
             if (osmdHost && currentXmlData) {
-                osmdHost.setOptions({ 
-                    darkMode: !isLightMode, 
+                osmdHost.setOptions({
+                    darkMode: !isLightMode,
                     defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
                     defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
-                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7" 
+                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
                 });
                 osmdHost.render();
                 highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             }
             if (osmdStudent && currentXmlData) {
-                osmdStudent.setOptions({ 
-                    darkMode: !isLightMode, 
+                osmdStudent.setOptions({
+                    darkMode: !isLightMode,
                     defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
                     defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
-                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7" 
+                    defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
                 });
                 osmdStudent.render();
                 loadAnnotations();
@@ -1592,7 +2110,7 @@
                 }
 
                 const pitchMap = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
-                const stringsMidi = [64, 59, 55, 50, 45, 40]; 
+                const stringsMidi = [64, 59, 55, 50, 45, 40];
 
                 const notes = xmlDoc.getElementsByTagName("note");
                 for (let i = 0; i < notes.length; i++) {
@@ -1624,7 +2142,7 @@
                     if (!found) {
                         for (let s = 0; s < 6; s++) {
                             const diff = midiPitch - stringsMidi[s];
-                            if (diff >= 0 && diff <= 24) { 
+                            if (diff >= 0 && diff <= 24) {
                                 stringNum = s + 1;
                                 fretNum = diff;
                                 found = true;
@@ -1634,7 +2152,7 @@
                     }
 
                     if (!found) {
-                        if (midiPitch < stringsMidi[5]) { stringNum = 6; fretNum = midiPitch - stringsMidi[5]; } 
+                        if (midiPitch < stringsMidi[5]) { stringNum = 6; fretNum = midiPitch - stringsMidi[5]; }
                         else { stringNum = 1; fretNum = midiPitch - stringsMidi[0]; }
                     }
 
@@ -1666,7 +2184,7 @@
                 return new XMLSerializer().serializeToString(xmlDoc);
             } catch(e) {
                 console.warn("TAB Conversion Error", e);
-                return xmlString; 
+                return xmlString;
             }
         }
 
@@ -1787,7 +2305,6 @@
             const container = document.getElementById('toast-container');
             if (!container) return;
             
-            // Positioning adjust: top left under Conductor when in host view to avoid button occlusion
             if (currentView === 'host') {
                 container.className = "fixed top-16 left-6 z-50 flex flex-col gap-2 transition-all duration-300 pointer-events-none";
             } else {
@@ -1816,7 +2333,7 @@
             const dot = document.getElementById(dotId);
             if(dot) {
                 dot.style.opacity = '1';
-                setTimeout(() => { dot.style.opacity = '0'; }, 100); 
+                setTimeout(() => { dot.style.opacity = '0'; }, 100);
             }
         };
 
@@ -1874,7 +2391,7 @@
                                 }, 2000);
                             }
                         } else {
-                            lastBroadcastTime = data.timestamp; 
+                            lastBroadcastTime = data.timestamp;
                         }
                     }
                 });
@@ -1912,7 +2429,7 @@
                             const isAway = r.status === 'away';
                             const awayIcon = isAway ? `<i class="fa-solid fa-moon text-yellow-500 ml-1" title="Tab in background"></i>` : '';
                             const opacityClass = isAway ? 'opacity-60' : '';
-                            const stuAvatar = r.avatar || '👤';
+                            const stuAvatar = r.avatar || '';
                             const tabSwitches = r.tabSwitches || 0;
                             const scoreDisplay = tabSwitches > 0 ? `<span class="bg-red-950 text-red-400 border border-red-800 px-1.5 py-0.5 rounded text-xs font-mono font-bold ml-1 shadow-sm">-${tabSwitches}</span>` : '';
                             rosterList.innerHTML += `
@@ -2023,6 +2540,8 @@
                 remove(ref(db, `rooms/${roomCode}/roster/${localStudentId}`));
             }
 
+            pauseSyncMedia();
+
             roomCode = "";
             currentXmlData = null;
             currentMeasureNumber = 1;
@@ -2056,7 +2575,6 @@
                         
             if(tunerActive) toggleTuner();
 
-            // Reset Host Controls
             const btnFocus = document.getElementById('btn-focus');
             if (btnFocus) {
                 btnFocus.classList.remove('bg-red-600', 'text-white', 'border-red-500');
@@ -2098,14 +2616,16 @@
             if(rosterSidebar) rosterSidebar.classList.add('hidden-view');
             const mixerSidebar = document.getElementById('host-mixer-sidebar');
             if(mixerSidebar) mixerSidebar.classList.add('hidden-view');
+            const mediaSidebar = document.getElementById('host-media-sidebar');
+            if(mediaSidebar) mediaSidebar.classList.add('hidden-view');
                         
             document.getElementById('host-bar-display').innerText = "Bar: 1";
             document.getElementById('host-room-code').innerText = "----";
-            document.getElementById('file-input').value = ""; 
+            document.getElementById('file-input').value = "";
 
             if (osmdHost) {
-                document.getElementById('osmd-host-container').innerHTML = ""; 
-                osmdHost = null; 
+                document.getElementById('osmd-host-container').innerHTML = "";
+                osmdHost = null;
             }
 
             document.getElementById('focus-overlay').classList.add('hidden-view');
@@ -2126,7 +2646,7 @@
             document.getElementById('measure-progress-text').innerText = 'Bar 0 of 0 • 0%';
 
             if (osmdStudent) {
-                document.getElementById('osmd-student-container').innerHTML = ""; 
+                document.getElementById('osmd-student-container').innerHTML = "";
                 osmdStudent = null;
             }
         }
@@ -2162,11 +2682,11 @@
             if (isFirebaseActive) {
                 try {
                     const roomRef = ref(db, `rooms/${roomCode}`);
-                    set(roomRef, { 
-                        measure: 1, 
-                        focusMode: false, 
+                    set(roomRef, {
+                        measure: 1,
+                        focusMode: false,
                         metronome: {active: false, bpm: 100, timeSig: currentTimeSignature},
-                        timestamp: Date.now() 
+                        timestamp: Date.now()
                     });
                     attachRoomListeners(roomCode, 'host');
                 } catch(e) {
@@ -2194,23 +2714,23 @@
                     if (snapshot.exists()) {
                         const roomData = snapshot.val();
                         if (roomData.xmlData) {
-                            roomCode = input; 
+                            roomCode = input;
                             currentXmlData = roomData.xmlData;
-                            currentStudentTranspose = 0; 
+                            currentStudentTranspose = 0;
                             currentStudentKeyTranspose = 0;
                             document.getElementById('key-selector').value = "0";
-                                                                                                        
+                                                                                        
                             document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
-                                                                                                        
+                                                                                        
                             const selector = document.getElementById('part-selector');
                             selector.classList.remove('bg-zinc-800', 'border-zinc-700', 'text-white');
                             selector.classList.add('bg-red-600', 'border-red-400', 'text-white', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
-                                                                                                        
+                                                                                        
                             showToast(`Score downloaded! Please select your part.`, 'success');
                             populateStudentParts(currentXmlData);
-                                                                                                        
+                                                                                        
                             attachRoomListeners(input, 'student');
-                                                                                                        
+                                                                                        
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
                             set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar, tabSwitches: 0 });
                             onDisconnect(myRosterRef).remove();
@@ -2238,7 +2758,7 @@
                         backend: "svg",
                         drawTitle: true,
                         drawPartNames: true,
-                        darkMode: !isLightMode, 
+                        darkMode: !isLightMode,
                         defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
                         defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
                         defaultColorTitle: isLightMode ? "#000000" : "#e4e4e7"
@@ -2407,6 +2927,9 @@
                 const xmlDoc = parser.parseFromString(currentXmlData, "text/xml");
                 
                 populateHostParts(xmlDoc);
+
+                const workTitle = xmlDoc.querySelector("work-title")?.textContent || xmlDoc.querySelector("movement-title")?.textContent || "";
+                songWorkTitle = workTitle.trim();
                                 
                 const timeNode = xmlDoc.querySelector("time");
                 if (timeNode) {
@@ -2448,13 +2971,11 @@
                     const measures = parts[0].getElementsByTagName("measure");
                     for(let m=0; m<measures.length; m++) {
                         const measureNum = parseInt(measures[m].getAttribute("number") || (m+1));
-                                                                                
                         const rehearsals = measures[m].getElementsByTagName("rehearsal");
                         if(rehearsals.length > 0) {
                             const mark = rehearsals[0].textContent.trim().toUpperCase();
                             hostRehearsalMarks[mark] = measureNum;
                         }
-                                                                                
                         const repeats = measures[m].getElementsByTagName("repeat");
                         for(let r=0; r<repeats.length; r++) {
                             if(repeats[r].getAttribute("direction") === "forward") {
@@ -2480,27 +3001,27 @@
                 measureStartBeats = buildMeasureStartBeats(osmdHost);
                 scoreEvents = extractScoreNotes(osmdHost, measureStartBeats);
                                 
-                setTimeout(() => { 
-                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper'); 
+                setTimeout(() => {
+                    highlightMeasure(osmdHost, 'host-highlight-box', 1, 'osmd-host-wrapper');
                     updateProgressUI();
                 }, 200);
 
                 const drumCount = Object.values(trackMixerStates).filter(t => t.isDrum).length;
                 const mutedCount = Object.values(trackMixerStates).filter(t => t.muted).length;
                 let toastMsg = `Score rendered (${currentTimeSignature.num}/${currentTimeSignature.den})`;
-                if (drumCount > 0) toastMsg += ` • 🥁 Drums routed to Channel 10`;
+                if (drumCount > 0) toastMsg += ` • Drums routed to Channel 10`;
                 if (mutedCount > 0) toastMsg += ` • ${mutedCount} transposed part${mutedCount > 1 ? 's' : ''} muted`;
                 showToast(toastMsg, 'success');
             } catch (err) {
                 showToast('Failed to draw sheet music.', 'error');
-                return; 
+                return;
             }
                         
             if (isFirebaseActive && roomCode) {
-                setTimeout(() => { 
+                setTimeout(() => {
                     set(ref(db, `rooms/${roomCode}/xmlData`), currentXmlData);
                     set(ref(db, `rooms/${roomCode}/metronome`), { active: metronomeActive, bpm: bpm, timeSig: currentTimeSignature });
-                }, 500); 
+                }, 500);
             }
         }
 
@@ -2517,7 +3038,7 @@
             const highlightBox = document.getElementById(highlightBoxId);
             if (!highlightBox || !osmdInstance || !osmdInstance.graphic) return;
 
-            const measureIndex = measureNumber - 1; 
+            const measureIndex = measureNumber - 1;
             const graphicSheet = osmdInstance.graphic;
             if (!graphicSheet.measureList || !graphicSheet.measureList[measureIndex]) {
                 highlightBox.classList.add('hidden-view');
@@ -2606,7 +3127,7 @@
                     }, 1000);
                 } else if (e.code === 'KeyR' || e.key.toUpperCase() === 'R') {
                     e.preventDefault();
-                    let target = 1; 
+                    let target = 1;
                     for(let i = hostRepeatMarks.length - 1; i >= 0; i--) {
                         if(hostRepeatMarks[i] <= currentMeasureNumber) {
                             if (hostRepeatMarks[i] === currentMeasureNumber && i > 0) {
@@ -2642,8 +3163,8 @@
                         
             if (playbackActive) {
                 const ctx = getAudioContext();
-                const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined) 
-                    ? measureStartBeats[currentMeasureNumber] 
+                const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined)
+                    ? measureStartBeats[currentMeasureNumber]
                     : (currentMeasureNumber - 1) * (currentTimeSignature.num || 4);
                 playbackStartBeat = targetBeat;
                 playbackStartTime = ctx.currentTime + 0.02;
@@ -2673,7 +3194,7 @@
                 const nameNode = partList[i].getElementsByTagName("part-name")[0];
                 if(nameNode) name = nameNode.textContent;
                 const opt = document.createElement('option');
-                opt.value = i; 
+                opt.value = i;
                 opt.text = name;
                 selector.appendChild(opt);
             }
@@ -2721,7 +3242,7 @@
         async function renderStudentTransposedXml(partIndex) {
             const totalTranspose = (currentStudentTranspose * 12) + currentStudentKeyTranspose;
                         
-            osmdStudent.setOptions({ 
+            osmdStudent.setOptions({
                 darkMode: !isLightMode,
                 defaultColorMusic: isLightMode ? "#000000" : "#e4e4e7",
                 defaultColorLabel: isLightMode ? "#000000" : "#e4e4e7",
@@ -2746,10 +3267,10 @@
                 }
             }
                         
-            try { 
-                osmdStudent.updateGraphic(); 
-            } catch(e) { 
-                console.warn("Graphic update issue", e); 
+            try {
+                osmdStudent.updateGraphic();
+            } catch(e) {
+                console.warn("Graphic update issue", e);
             }
                         
             osmdStudent.zoom = studentZoom;
@@ -2786,18 +3307,17 @@
             }
         };
 
-        // --- ZOOM & PINCH GESTURES ---
         window.changeZoom = function(val, role) {
             if(role === 'host' && osmdHost) {
-                hostZoom = parseFloat(val); 
-                osmdHost.zoom = hostZoom; 
-                osmdHost.render(); 
+                hostZoom = parseFloat(val);
+                osmdHost.zoom = hostZoom;
+                osmdHost.render();
                 highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             }
             if(role === 'student' && osmdStudent) {
-                studentZoom = parseFloat(val); 
-                osmdStudent.zoom = studentZoom; 
-                osmdStudent.render(); 
+                studentZoom = parseFloat(val);
+                osmdStudent.zoom = studentZoom;
+                osmdStudent.render();
                 loadAnnotations();
                 highlightMeasure(osmdStudent, 'student-highlight-box', currentMeasureNumber, 'osmd-student-wrapper');
             }
@@ -2835,7 +3355,6 @@
             wrapper.addEventListener('touchend', (e) => { if(e.touches.length < 2) initialDist = null; });
         }
 
-        // --- DRAWING TOOL ---
         window.toggleDrawMode = function() {
             isDrawMode = !isDrawMode;
             const btn = document.getElementById('btn-draw');
@@ -2957,7 +3476,6 @@
             }
         };
 
-        // --- BUILT-IN TUNER ---
         window.toggleTuner = async function() {
             tunerActive = !tunerActive;
             const btn = document.getElementById('btn-tuner');
