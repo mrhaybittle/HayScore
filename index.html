@@ -390,7 +390,7 @@
                         <button onclick="seekSyncMediaToMeasure(1)" class="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs transition" title="Rewind Media to Bar 1">
                             <i class="fa-solid fa-backward-step"></i>
                         </button>
-                        <button id="btn-sync-media-play" onclick="toggleSyncMediaPlayback()" class="px-5 py-1.5 rounded-lg bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white font-bold text-xs flex items-center gap-2 transition">
+                        <button id="btn-sync-media-play" onclick="togglePlayback()" class="px-5 py-1.5 rounded-lg bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white font-bold text-xs flex items-center gap-2 transition">
                             <i class="fa-solid fa-play"></i> Play Along
                         </button>
                         <span id="sync-media-timecode" class="text-xs font-mono text-zinc-400">00:00.0</span>
@@ -445,9 +445,7 @@
                     <h3 class="font-bold text-zinc-100"><i class="fa-solid fa-users mr-2 text-red-500"></i> Live Roster</h3>
                     <span id="roster-count" class="text-xs bg-zinc-800 px-2 py-1 rounded text-zinc-400">0</span>
                 </div>
-                <div id="roster-list" class="flex-1 overflow-auto p-2 space-y-1 osmd-scroll">
-                    <!-- Populated by JS -->
-                </div>
+                <div id="roster-list" class="flex-1 overflow-auto p-2 space-y-1 osmd-scroll"></div>
             </div>
         </div>
     </div>
@@ -592,7 +590,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.24.0 • Dual Audio & YouTube Sync with Auto-BPM Detection</div>
+        <div>v2.24.0 • Full Duplex Two-Way Audio & YouTube Synchronization</div>
     </footer>
 
     <script type="module">
@@ -744,6 +742,7 @@
             }
         };
 
+        // --- FULL DUPLEX: LOAD AUDIO AND BIND NATIVE EVENTS ---
         window.loadMediaAudioFile = async function(files) {
             if (!files || files.length === 0) return;
             const file = files[0];
@@ -754,9 +753,35 @@
             audioEl.src = URL.createObjectURL(file);
             audioEl.playbackRate = syncPlaybackRate;
 
+            // Full Duplex: Audio native controls drive application state
+            audioEl.onplay = () => {
+                if (!isSyncMediaPlaying) {
+                    isSyncMediaPlaying = true;
+                    updatePlayButtonsUI(true);
+                    syncMediaLoop();
+                }
+            };
+            audioEl.onpause = () => {
+                if (isSyncMediaPlaying) {
+                    isSyncMediaPlaying = false;
+                    updatePlayButtonsUI(false);
+                    if (syncMediaRafId) cancelAnimationFrame(syncMediaRafId);
+                }
+            };
+            audioEl.onseeked = () => {
+                const effectiveTime = audioEl.currentTime - syncStartOffsetSec - (syncFineOffsetMs / 1000.0);
+                if (effectiveTime >= 0) {
+                    const secondsPerBeat = 60.0 / bpm;
+                    const currentScoreBeat = (effectiveTime * syncPlaybackRate) / secondsPerBeat;
+                    const activeMeasure = getMeasureForBeat(currentScoreBeat);
+                    if (activeMeasure !== currentMeasureNumber) {
+                        advanceHostMeasure(activeMeasure, true);
+                    }
+                }
+            };
+
             showToast(`Loaded audio: ${file.name}`, 'info');
 
-            // Read arrayBuffer for fast client-side beat detection
             const reader = new FileReader();
             reader.onload = async (e) => {
                 const ctx = getAudioContext();
@@ -778,6 +803,7 @@
             return (match && match[2].length === 11) ? match[2] : urlOrId.trim();
         }
 
+        // --- FULL DUPLEX: LOAD YOUTUBE WITH EMBED EVENT LISTENERS ---
         window.loadYouTubeVideo = function() {
             const input = document.getElementById('youtube-url-input');
             const videoId = extractYouTubeId(input.value);
@@ -791,6 +817,26 @@
                 return;
             }
 
+            const playerEvents = {
+                'onReady': () => showToast('YouTube video loaded and ready to sync.', 'success'),
+                'onStateChange': (event) => {
+                    // Full Duplex: YouTube Player native playback updates HayScore state
+                    if (event.data === window.YT.PlayerState.PLAYING) {
+                        if (!isSyncMediaPlaying) {
+                            isSyncMediaPlaying = true;
+                            updatePlayButtonsUI(true);
+                            syncMediaLoop();
+                        }
+                    } else if (event.data === window.YT.PlayerState.PAUSED || event.data === window.YT.PlayerState.ENDED) {
+                        if (isSyncMediaPlaying) {
+                            isSyncMediaPlaying = false;
+                            updatePlayButtonsUI(false);
+                            if (syncMediaRafId) cancelAnimationFrame(syncMediaRafId);
+                        }
+                    }
+                }
+            };
+
             if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
                 ytPlayer.loadVideoById(videoId);
             } else {
@@ -803,9 +849,7 @@
                         'controls': 1,
                         'rel': 0
                     },
-                    events: {
-                        'onReady': () => showToast('YouTube video loaded and ready to sync.', 'success')
-                    }
+                    events: playerEvents
                 });
             }
         };
@@ -837,15 +881,13 @@
         };
 
         async function analyzeAudioBufferTempo(audioBuffer) {
-            // Analyze the first 45 seconds using an OfflineAudioContext
             const duration = Math.min(45, audioBuffer.duration);
-            const sampleRate = 22050; // downsample to speed up FFT/convolution
+            const sampleRate = 22050;
             const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, duration * sampleRate, sampleRate);
 
             const source = offlineCtx.createBufferSource();
             source.buffer = audioBuffer;
 
-            // Low-pass filter to isolate rhythmic bass/kick drum fundamentals
             const filter = offlineCtx.createBiquadFilter();
             filter.type = "lowpass";
             filter.frequency.setValueAtTime(150, 0);
@@ -857,7 +899,6 @@
             const rendered = await offlineCtx.startRendering();
             const data = rendered.getChannelData(0);
 
-            // Calculate RMS energy over 50ms windows
             const windowSize = Math.floor(sampleRate * 0.05);
             const energyList = [];
             for (let i = 0; i < data.length; i += windowSize) {
@@ -868,15 +909,13 @@
                 energyList.push(Math.sqrt(sum / windowSize));
             }
 
-            // Differentiate / compute onset spikes
             const onsets = [];
             for (let i = 1; i < energyList.length; i++) {
                 const diff = energyList[i] - energyList[i - 1];
                 onsets.push(diff > 0 ? diff : 0);
             }
 
-            // Autocorrelation across common BPM ranges (60 to 190 BPM)
-            const fps = sampleRate / windowSize; // ~20 frames per second
+            const fps = sampleRate / windowSize;
             let bestBpm = 100;
             let maxCorr = -1;
 
@@ -983,6 +1022,55 @@
             showToast('Sync offsets reset', 'info');
         };
 
+        // --- FULL DUPLEX PLAYBACK STATE MANAGERS ---
+        function updatePlayButtonsUI(isPlaying) {
+            const btnPlay = document.getElementById('btn-play');
+            const btnSync = document.getElementById('btn-sync-media-play');
+
+            if (btnPlay) {
+                if (isPlaying) {
+                    btnPlay.classList.remove('bg-green-600/20', 'text-green-500');
+                    btnPlay.classList.add('bg-red-600', 'text-white');
+                    btnPlay.innerHTML = '<i class="fa-solid fa-pause"></i>';
+                } else {
+                    btnPlay.classList.add('bg-green-600/20', 'text-green-500');
+                    btnPlay.classList.remove('bg-red-600', 'text-white');
+                    btnPlay.innerHTML = '<i class="fa-solid fa-play"></i>';
+                }
+            }
+
+            if (btnSync) {
+                if (isPlaying) {
+                    btnSync.className = "px-5 py-1.5 rounded-lg bg-red-600 text-white font-bold text-xs flex items-center gap-2 transition";
+                    btnSync.innerHTML = '<i class="fa-solid fa-pause"></i> Pause';
+                } else {
+                    btnSync.className = "px-5 py-1.5 rounded-lg bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white font-bold text-xs flex items-center gap-2 transition";
+                    btnSync.innerHTML = '<i class="fa-solid fa-play"></i> Play Along';
+                }
+            }
+        }
+
+        window.togglePlayback = function() {
+            const hasAudio = !!importedAudioBuffer;
+            const hasYt = !!(ytPlayer && typeof ytPlayer.getPlayerState === 'function');
+
+            if (hasAudio || hasYt) {
+                window.toggleSyncMediaPlayback();
+            } else {
+                playbackActive = !playbackActive;
+                bpm = parseInt(document.getElementById('bpm-input').value) || 100;
+                updatePlayButtonsUI(playbackActive);
+
+                if (playbackActive) {
+                    startScorePlayback();
+                    showToast(`Playing score synth (${bpm} BPM)`, 'success');
+                } else {
+                    stopScorePlayback();
+                    showToast('Playback stopped.', 'info');
+                }
+            }
+        };
+
         window.toggleSyncMediaPlayback = function() {
             if (isSyncMediaPlaying) {
                 pauseSyncMedia();
@@ -993,17 +1081,13 @@
 
         function playSyncMedia() {
             isSyncMediaPlaying = true;
-            const btn = document.getElementById('btn-sync-media-play');
-            if (btn) {
-                btn.className = "px-5 py-1.5 rounded-lg bg-red-600 text-white font-bold text-xs flex items-center gap-2 transition";
-                btn.innerHTML = '<i class="fa-solid fa-pause"></i> Pause';
-            }
+            updatePlayButtonsUI(true);
 
             if (syncSourceMode === 'audio') {
                 const a = document.getElementById('sync-audio-element');
                 if (a) {
                     a.playbackRate = syncPlaybackRate;
-                    a.play();
+                    a.play().catch(e => console.warn("Audio play prevented:", e));
                 }
             } else if (syncSourceMode === 'youtube' && ytPlayer && typeof ytPlayer.playVideo === 'function') {
                 ytPlayer.setPlaybackRate(syncPlaybackRate);
@@ -1011,16 +1095,12 @@
             }
 
             syncMediaLoop();
-            showToast('Synchronized playback active.', 'success');
+            showToast('Synchronized media active.', 'success');
         }
 
         function pauseSyncMedia() {
             isSyncMediaPlaying = false;
-            const btn = document.getElementById('btn-sync-media-play');
-            if (btn) {
-                btn.className = "px-5 py-1.5 rounded-lg bg-green-600/20 text-green-500 hover:bg-green-600 hover:text-white font-bold text-xs flex items-center gap-2 transition";
-                btn.innerHTML = '<i class="fa-solid fa-play"></i> Play Along';
-            }
+            updatePlayButtonsUI(false);
 
             if (syncSourceMode === 'audio') {
                 const a = document.getElementById('sync-audio-element');
@@ -1030,9 +1110,10 @@
             }
 
             if (syncMediaRafId) cancelAnimationFrame(syncMediaRafId);
+            showToast('Media paused.', 'info');
         }
 
-        window.seekSyncMediaToMeasure = function(targetMeasure = 1) {
+        function seekMediaOnlyToMeasure(targetMeasure) {
             const beatsPerMeasure = (currentTimeSignature && currentTimeSignature.num) ? currentTimeSignature.num : 4;
             const targetBeat = (measureStartBeats[targetMeasure] !== undefined)
                 ? measureStartBeats[targetMeasure]
@@ -1044,14 +1125,17 @@
 
             if (syncSourceMode === 'audio') {
                 const a = document.getElementById('sync-audio-element');
-                if (a) a.currentTime = mediaSeekTime;
+                if (a && !isNaN(a.duration)) a.currentTime = mediaSeekTime;
             } else if (syncSourceMode === 'youtube' && ytPlayer && typeof ytPlayer.seekTo === 'function') {
                 ytPlayer.seekTo(mediaSeekTime, true);
             }
-            advanceHostMeasure(targetMeasure);
+        }
+
+        window.seekSyncMediaToMeasure = function(targetMeasure = 1) {
+            advanceHostMeasure(targetMeasure, false);
         };
 
-        // --- Continuous Media-to-Score Sync Loop ---
+        // --- CONTINUOUS FULL-DUPLEX MEDIA-TO-SCORE SYNC LOOP ---
         function syncMediaLoop() {
             if (!isSyncMediaPlaying) return;
 
@@ -1079,9 +1163,7 @@
                 const activeMeasure = getMeasureForBeat(currentScoreBeat);
 
                 if (activeMeasure !== currentMeasureNumber && activeMeasure <= totalMeasuresCache && activeMeasure >= 1) {
-                    currentMeasureNumber = activeMeasure;
-                    highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
-                    updateProgressUI();
+                    advanceHostMeasure(activeMeasure, true);
                 }
 
                 // Student sync broadcast with forward lead
@@ -1219,11 +1301,11 @@
         }
 
         window.rewindToStart = function() {
-            advanceHostMeasure(1);
+            advanceHostMeasure(1, false);
             showToast('Rewound to start (Bar 1)', 'info');
             scheduleCountIn(() => {
-                if (!playbackActive) {
-                    togglePlayback();
+                if (!isSyncMediaPlaying && !playbackActive) {
+                    window.togglePlayback();
                 }
             });
         };
@@ -1717,8 +1799,8 @@
 
             const lastEventBeat = scoreEvents.length > 0 ? scoreEvents[scoreEvents.length - 1].beat : 0;
             if (playbackNextEventIdx >= scoreEvents.length && currentAudioBeat > lastEventBeat + 2) {
-                togglePlayback();
-                advanceHostMeasure(1);
+                window.togglePlayback();
+                advanceHostMeasure(1, false);
                 return;
             }
 
@@ -2513,28 +2595,6 @@
             }
         };
 
-        window.togglePlayback = function() {
-            playbackActive = !playbackActive;
-            const btn = document.getElementById('btn-play');
-            bpm = parseInt(document.getElementById('bpm-input').value) || 100;
-                        
-            if (playbackActive) {
-                btn.classList.remove('bg-green-600/20', 'text-green-500');
-                btn.classList.add('bg-red-600', 'text-white');
-                btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
-                
-                startScorePlayback();
-                showToast(`Playing sheet music audio (${bpm} BPM)`, 'success');
-            } else {
-                btn.classList.add('bg-green-600/20', 'text-green-500');
-                btn.classList.remove('bg-red-600', 'text-white');
-                btn.innerHTML = '<i class="fa-solid fa-play"></i>';
-                
-                stopScorePlayback();
-                showToast('Playback stopped.', 'info');
-            }
-        };
-
         function resetSession() {
             if(isFirebaseActive && roomCode && localStudentId) {
                 remove(ref(db, `rooms/${roomCode}/roster/${localStudentId}`));
@@ -2585,12 +2645,8 @@
                 btnMetro.classList.remove('bg-red-600', 'text-white');
                 btnMetro.classList.add('bg-zinc-800', 'text-zinc-300');
             }
-            const btnPlay = document.getElementById('btn-play');
-            if (btnPlay) {
-                btnPlay.classList.remove('bg-red-600', 'text-white');
-                btnPlay.classList.add('bg-green-600/20', 'text-green-500');
-                btnPlay.innerHTML = '<i class="fa-solid fa-play"></i>';
-            }
+            updatePlayButtonsUI(false);
+            
             const bcInput = document.getElementById('broadcast-input');
             if (bcInput) bcInput.value = "";
             const hSlider = document.getElementById('host-zoom-slider');
@@ -2719,18 +2775,18 @@
                             currentStudentTranspose = 0;
                             currentStudentKeyTranspose = 0;
                             document.getElementById('key-selector').value = "0";
-                                                                                        
+                                                        
                             document.getElementById('student-controls').classList.remove('opacity-50', 'pointer-events-none');
-                                                                                        
+                                                        
                             const selector = document.getElementById('part-selector');
                             selector.classList.remove('bg-zinc-800', 'border-zinc-700', 'text-white');
                             selector.classList.add('bg-red-600', 'border-red-400', 'text-white', 'animate-pulse', 'shadow-[0_0_15px_rgba(220,38,38,0.6)]');
-                                                                                        
+                                                        
                             showToast(`Score downloaded! Please select your part.`, 'success');
                             populateStudentParts(currentXmlData);
-                                                                                        
+                                                        
                             attachRoomListeners(input, 'student');
-                                                                                        
+                                                        
                             const myRosterRef = ref(db, `rooms/${roomCode}/roster/${localStudentId}`);
                             set(myRosterRef, { name: localStudentName, partName: "", status: "active", avatar: localStudentAvatar, tabSwitches: 0 });
                             onDisconnect(myRosterRef).remove();
@@ -3084,7 +3140,7 @@
         function setupHostClickInteractions() {
             const container = document.getElementById('osmd-host-container');
             if (container) {
-                container.addEventListener('click', () => advanceHostMeasure(currentMeasureNumber + 1));
+                container.addEventListener('click', () => advanceHostMeasure(currentMeasureNumber + 1, false));
             }
         }
 
@@ -3092,7 +3148,7 @@
             if (!osmdHost || !osmdHost.graphic) return;
             const total = osmdHost.graphic.measureList.length;
             if (targetBar >= 1 && targetBar <= total) {
-                advanceHostMeasure(targetBar);
+                advanceHostMeasure(targetBar, false);
                 showToast(`Jumped to Bar ${targetBar}`, 'info');
             } else {
                 showToast(`Bar ${targetBar} is out of range (1-${total})`, 'error');
@@ -3108,10 +3164,10 @@
                     rewindToStart();
                 } else if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'ArrowDown') {
                     e.preventDefault();
-                    advanceHostMeasure(currentMeasureNumber + 1);
+                    advanceHostMeasure(currentMeasureNumber + 1, false);
                 } else if (e.code === 'ArrowLeft' || e.code === 'ArrowUp') {
                     e.preventDefault();
-                    advanceHostMeasure(currentMeasureNumber - 1);
+                    advanceHostMeasure(currentMeasureNumber - 1, false);
                 } else if (/^[0-9]$/.test(e.key)) {
                     e.preventDefault();
                     numberBuffer += e.key;
@@ -3138,29 +3194,44 @@
                             break;
                         }
                     }
-                    advanceHostMeasure(target);
+                    advanceHostMeasure(target, false);
                     showToast(`Jumped to Repeat (Bar ${target})`, 'info');
                 } else if (/^[A-Z]$/.test(e.key.toUpperCase())) {
                     const mark = e.key.toUpperCase();
                     if (hostRehearsalMarks[mark]) {
-                        advanceHostMeasure(hostRehearsalMarks[mark]);
+                        advanceHostMeasure(hostRehearsalMarks[mark], false);
                         showToast(`Jumped to Mark ${mark}`, 'info');
                     }
                 }
             }
         });
 
-        function advanceHostMeasure(targetMeasure) {
+        // --- FULL DUPLEX ADVANCE HOST MEASURE ---
+        function advanceHostMeasure(targetMeasure, fromMedia = false) {
             if (!osmdHost || !osmdHost.graphic) return;
             const totalMeasures = osmdHost.graphic.measureList.length;
             if (targetMeasure > totalMeasures) targetMeasure = 1;
             if (targetMeasure < 1) targetMeasure = totalMeasures;
                         
             currentMeasureNumber = targetMeasure;
-            lastBroadcastStudentMeasure = targetMeasure;
             highlightMeasure(osmdHost, 'host-highlight-box', currentMeasureNumber, 'osmd-host-wrapper');
             updateProgressUI();
+
+            // 1. Full Duplex: If triggered from UI/score/keys, seek the media directly
+            if (!fromMedia) {
+                seekMediaOnlyToMeasure(targetMeasure);
+                lastBroadcastStudentMeasure = targetMeasure;
+                if (isFirebaseActive && roomCode) {
+                    set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
+                }
+            } else if (!isSyncMediaPlaying) {
+                lastBroadcastStudentMeasure = targetMeasure;
+                if (isFirebaseActive && roomCode) {
+                    set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
+                }
+            }
                         
+            // 2. Align synthetic sheet audio playback if active
             if (playbackActive) {
                 const ctx = getAudioContext();
                 const targetBeat = (measureStartBeats[currentMeasureNumber] !== undefined)
@@ -3173,10 +3244,6 @@
                     playbackNextEventIdx++;
                 }
                 syncMetronomeToPlayback();
-            }
-
-            if (isFirebaseActive && roomCode) {
-                set(ref(db, `rooms/${roomCode}/measure`), currentMeasureNumber);
             }
         }
 
