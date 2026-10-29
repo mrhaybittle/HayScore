@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HayScore</title>
         
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         
     <script src="https://unpkg.com/opensheetmusicdisplay"></script>
     <script src="https://unpkg.com/@tonejs/midi"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 
     <style>
         body {
@@ -47,6 +48,15 @@
             box-shadow: 0 0 18px rgba(239, 68, 68, 0.45);
             z-index: 30;
             mix-blend-mode: screen;
+        }
+
+        @keyframes cuePulse {
+            0% { transform: scale(0.65); opacity: 0; }
+            45% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-cue-pulse {
+            animation: cuePulse 0.16s ease-out forwards;
         }
 
         /* --- Light / Paper Mode Overrides --- */
@@ -313,7 +323,7 @@
                             </button>
                         </div>
                         <div id="media-audio-filename" class="text-[11px] text-zinc-500 truncate font-mono">No audio loaded</div>
-                        <audio id="sync-audio-element" class="hidden"></audio>
+                        <audio id="sync-audio-element" class="hidden" crossorigin="anonymous"></audio>
                     </div>
 
                     <!-- YouTube Section -->
@@ -382,6 +392,24 @@
                                 <span id="sync-rate-label" class="font-mono text-zinc-200">1.00x</span>
                             </div>
                             <input type="range" id="sync-rate-slider" min="0.5" max="1.5" step="0.05" value="1.0" oninput="updateSyncPlaybackRate(this.value)" class="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-green-500">
+                        </div>
+
+                        <!-- Audio Pitch Shift (+/- semitones without tempo change) -->
+                        <div>
+                            <div class="flex justify-between text-xs text-zinc-400 mb-1">
+                                <span><i class="fa-solid fa-music mr-1 text-cyan-400"></i> Pitch Transpose (Audio & Synth)</span>
+                                <span id="sync-pitch-label" class="font-mono text-cyan-400 font-bold">0 st</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="shiftMediaPitch(-1)" class="w-8 h-7 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[11px] font-mono text-zinc-200" title="Transpose Down 1 Semitone">-1</button>
+                                <input type="range" id="sync-pitch-slider" min="-12" max="12" step="1" value="0" oninput="updateMediaPitch(this.value)" class="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                                <button onclick="shiftMediaPitch(1)" class="w-8 h-7 rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-[11px] font-mono text-zinc-200" title="Transpose Up 1 Semitone">+1</button>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-zinc-500 font-mono mt-0.5">
+                                <span>-12 st</span>
+                                <span>0 st</span>
+                                <span>+12 st</span>
+                            </div>
                         </div>
                     </div>
 
@@ -461,6 +489,37 @@
         <div id="broadcast-overlay" class="hidden-view absolute inset-0 z-[110] backdrop-blur-xl bg-blue-900/80 flex flex-col items-center justify-center transition-all duration-300">
             <i class="fa-solid fa-bullhorn text-7xl text-blue-300 mb-6 animate-bounce drop-shadow-lg"></i>
             <h2 id="broadcast-text" class="text-6xl sm:text-7xl font-black text-white tracking-wide shadow-black drop-shadow-2xl text-center px-4 leading-tight uppercase">MESSAGE</h2>
+        </div>
+
+        <!-- MULTIMEASURE REST PROGRESS HUD -->
+        <div id="student-multirest-hud" class="hidden-view absolute top-20 left-1/2 transform -translate-x-1/2 z-40 bg-zinc-900/95 border-2 border-amber-500/80 rounded-2xl px-6 py-2.5 shadow-[0_0_25px_rgba(245,158,11,0.35)] backdrop-blur-md flex items-center gap-4 transition-all">
+            <div class="flex items-center gap-2 text-amber-400 font-bold text-sm tracking-wide">
+                <i class="fa-solid fa-pause text-base animate-pulse"></i>
+                <span>MULTI-BAR REST</span>
+            </div>
+            <div class="w-px h-5 bg-zinc-700"></div>
+            <div class="flex flex-col">
+                <span id="multirest-hud-text" class="text-white font-mono font-bold text-sm">Bar 1 of 8</span>
+                <span id="multirest-hud-sub" class="text-[11px] text-zinc-400 font-mono">7 bars until entry</span>
+            </div>
+            <div class="w-24 h-2 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
+                <div id="multirest-hud-bar" class="h-full bg-amber-500 transition-all duration-200" style="width: 12%"></div>
+            </div>
+        </div>
+
+        <!-- LARGE LAST-BAR CUE OVERLAY (1, 2, 3, 4) -->
+        <div id="student-cue-overlay" class="hidden-view absolute inset-0 z-[80] pointer-events-none flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] transition-all">
+            <div class="bg-zinc-950/90 border-4 border-red-600 rounded-3xl p-8 sm:p-12 shadow-[0_0_50px_rgba(220,38,38,0.7)] flex flex-col items-center gap-2">
+                <div class="text-red-500 text-lg sm:text-2xl font-black uppercase tracking-widest flex items-center gap-2">
+                    <i class="fa-solid fa-flag-checkered animate-bounce"></i> GET READY • ENTRY NEXT BAR
+                </div>
+                <div id="cue-counter-number" class="text-8xl sm:text-9xl font-black text-white font-mono drop-shadow-[0_0_35px_rgba(239,68,68,1)] transform scale-100 transition-transform">
+                    1
+                </div>
+                <div id="cue-counter-sub" class="text-xs sm:text-sm text-zinc-400 font-mono uppercase tracking-wider">
+                    Beat 1 of 4
+                </div>
+            </div>
         </div>
 
         <div id="tuner-overlay" class="hidden-view absolute top-20 right-4 bg-zinc-900/90 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-xl p-4 z-[60] flex flex-col items-center min-w-[120px] transition-all cursor-move">
@@ -590,7 +649,7 @@
             </div>
             <span id="measure-progress-text">Bar 0 of 0 • 0%</span>
         </div>
-        <div>v2.24.0 • Full Duplex Two-Way Audio & YouTube Synchronization</div>
+        <div>v2.25.0 • Multimeasure Rest Cue & Audio Pitch Transpose Active</div>
     </footer>
 
     <script type="module">
@@ -650,6 +709,10 @@
         let hostRehearsalMarks = {};
         let hostRepeatMarks = [];
 
+        // Multimeasure Rest state & cue timers
+        let studentRestSpans = []; // [{ start: 5, end: 12, total: 8 }]
+        let activeCueTimeouts = [];
+
         let focusActive = false;
         let metronomeActive = false;
         let playbackActive = false;
@@ -698,6 +761,11 @@
         let syncMediaRafId = null;
         let detectedTempo = null;
 
+        // Pitch shifting state (without tempo change)
+        let mediaPitchShiftSemitones = 0;
+        let tonePitchShiftNode = null;
+        let audioMediaSourceNode = null;
+
         // YouTube API Iframe player
         let ytPlayer = null;
         let isYtApiReady = false;
@@ -742,7 +810,65 @@
             }
         };
 
-        // --- FULL DUPLEX: LOAD AUDIO AND BIND NATIVE EVENTS ---
+        // --- TONE.JS PITCH SHIFTER PIPELINE ---
+        function getTonePitchShifter() {
+            if (!tonePitchShiftNode && window.Tone) {
+                try {
+                    const ctx = getAudioContext();
+                    Tone.setContext(ctx);
+                    tonePitchShiftNode = new Tone.PitchShift({
+                        pitch: mediaPitchShiftSemitones,
+                        windowSize: 0.1,
+                        feedback: 0
+                    }).toDestination();
+                } catch(e) {
+                    console.warn("PitchShifter init notice:", e);
+                }
+            }
+            return tonePitchShiftNode;
+        }
+
+        function connectAudioElementToPitchShifter() {
+            const audioEl = document.getElementById('sync-audio-element');
+            if (!audioEl || audioMediaSourceNode) return;
+            try {
+                const ctx = getAudioContext();
+                const shifter = getTonePitchShifter();
+                if (shifter) {
+                    audioMediaSourceNode = ctx.createMediaElementSource(audioEl);
+                    Tone.connect(audioMediaSourceNode, shifter);
+                }
+            } catch(e) {
+                console.warn("MediaElementSource connection notice:", e);
+            }
+        }
+
+        window.shiftMediaPitch = function(delta) {
+            updateMediaPitch(mediaPitchShiftSemitones + delta);
+        };
+
+        window.updateMediaPitch = function(val) {
+            mediaPitchShiftSemitones = parseInt(val) || 0;
+            mediaPitchShiftSemitones = Math.max(-12, Math.min(12, mediaPitchShiftSemitones));
+
+            const slider = document.getElementById('sync-pitch-slider');
+            const label = document.getElementById('sync-pitch-label');
+            if (slider) slider.value = mediaPitchShiftSemitones;
+            if (label) label.innerText = `${mediaPitchShiftSemitones > 0 ? '+' : ''}${mediaPitchShiftSemitones} st`;
+
+            const shifter = getTonePitchShifter();
+            if (shifter) {
+                shifter.pitch = mediaPitchShiftSemitones;
+            }
+
+            let msg = `Audio & Synth transposed to ${mediaPitchShiftSemitones > 0 ? '+' : ''}${mediaPitchShiftSemitones} semitones (tempo unchanged)`;
+            if (syncSourceMode === 'youtube') {
+                msg += " • Note: YouTube cross-origin audio restricts direct pitch shifting; score synth is aligned.";
+            }
+            showToast(msg, 'info');
+        };
+
+        // --- FULL DUPLEX AUDIO FILE IMPORT ---
         window.loadMediaAudioFile = async function(files) {
             if (!files || files.length === 0) return;
             const file = files[0];
@@ -753,7 +879,9 @@
             audioEl.src = URL.createObjectURL(file);
             audioEl.playbackRate = syncPlaybackRate;
 
-            // Full Duplex: Audio native controls drive application state
+            connectAudioElementToPitchShifter();
+
+            // Full Duplex: Audio native controls drive HayScore application state
             audioEl.onplay = () => {
                 if (!isSyncMediaPlaying) {
                     isSyncMediaPlaying = true;
@@ -803,7 +931,7 @@
             return (match && match[2].length === 11) ? match[2] : urlOrId.trim();
         }
 
-        // --- FULL DUPLEX: LOAD YOUTUBE WITH EMBED EVENT LISTENERS ---
+        // --- FULL DUPLEX YOUTUBE VIDEO LOAD ---
         window.loadYouTubeVideo = function() {
             const input = document.getElementById('youtube-url-input');
             const videoId = extractYouTubeId(input.value);
@@ -820,7 +948,7 @@
             const playerEvents = {
                 'onReady': () => showToast('YouTube video loaded and ready to sync.', 'success'),
                 'onStateChange': (event) => {
-                    // Full Duplex: YouTube Player native playback updates HayScore state
+                    // Full Duplex: YouTube native player updates HayScore state
                     if (event.data === window.YT.PlayerState.PLAYING) {
                         if (!isSyncMediaPlaying) {
                             isSyncMediaPlaying = true;
@@ -1005,21 +1133,26 @@
             syncStartOffsetSec = 0.0;
             syncFineOffsetMs = 0;
             syncPlaybackRate = 1.0;
+            mediaPitchShiftSemitones = 0;
 
             const startS = document.getElementById('sync-start-slider');
             const fineS = document.getElementById('sync-fine-slider');
             const rateS = document.getElementById('sync-rate-slider');
+            const pitchS = document.getElementById('sync-pitch-slider');
 
             if (startS) startS.value = 0;
             if (fineS) fineS.value = 0;
             if (rateS) rateS.value = 1.0;
+            if (pitchS) pitchS.value = 0;
 
             document.getElementById('sync-start-label').innerText = "0.00s";
             document.getElementById('sync-fine-label').innerText = "0 ms";
             document.getElementById('sync-rate-label').innerText = "1.00x";
+            document.getElementById('sync-pitch-label').innerText = "0 st";
 
             updateSyncPlaybackRate(1.0);
-            showToast('Sync offsets reset', 'info');
+            updateMediaPitch(0);
+            showToast('Sync offsets & pitch reset', 'info');
         };
 
         // --- FULL DUPLEX PLAYBACK STATE MANAGERS ---
@@ -1086,6 +1219,7 @@
             if (syncSourceMode === 'audio') {
                 const a = document.getElementById('sync-audio-element');
                 if (a) {
+                    connectAudioElementToPitchShifter();
                     a.playbackRate = syncPlaybackRate;
                     a.play().catch(e => console.warn("Audio play prevented:", e));
                 }
@@ -1772,7 +1906,7 @@
                     if (trk && trk.isDrum) {
                         playDrumSound(ev.pitch, noteAudioTime, gainNode);
                     } else {
-                        const shiftedPitch = ev.pitch + (trk.octaveShift || 0) * 12;
+                        const shiftedPitch = ev.pitch + (trk.octaveShift || 0) * 12 + mediaPitchShiftSemitones;
                         playMelodicNote(shiftedPitch, noteAudioTime, noteDurationSeconds, gainNode);
                     }
                 }
@@ -2612,6 +2746,9 @@
             localTabSwitches = 0;
             hostRehearsalMarks = {};
             hostRepeatMarks = [];
+            studentRestSpans = [];
+            activeCueTimeouts.forEach(t => clearTimeout(t));
+            activeCueTimeouts = [];
             studentAnnotations = [];
             focusActive = false;
             metronomeActive = false;
@@ -2700,6 +2837,11 @@
                         
             document.getElementById('measure-progress-bar').style.width = '0%';
             document.getElementById('measure-progress-text').innerText = 'Bar 0 of 0 • 0%';
+
+            const hud = document.getElementById('student-multirest-hud');
+            if (hud) hud.classList.add('hidden-view');
+            const cue = document.getElementById('student-cue-overlay');
+            if (cue) cue.classList.add('hidden-view');
 
             if (osmdStudent) {
                 document.getElementById('osmd-student-container').innerHTML = "";
@@ -3267,6 +3409,157 @@
             }
         };
 
+        // --- MULTIMEASURE REST ANALYZER ---
+        function computePartRestSpans(xmlString, partIndex) {
+            const spans = [];
+            if (!xmlString) return spans;
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+                const parts = xmlDoc.getElementsByTagName("part");
+                const targetPart = parts[partIndex] || parts[0];
+                if (!targetPart) return spans;
+
+                const measures = targetPart.getElementsByTagName("measure");
+                let currentRestStart = null;
+                let currentRestCount = 0;
+
+                for (let i = 0; i < measures.length; i++) {
+                    const m = measures[i];
+                    const mNum = parseInt(m.getAttribute("number") || (i + 1));
+
+                    // Check explicit multiple-rest in measure attributes
+                    const multipleRestNode = m.querySelector("multiple-rest");
+                    if (multipleRestNode) {
+                        const count = parseInt(multipleRestNode.textContent) || 0;
+                        if (count > 1) {
+                            spans.push({
+                                start: mNum,
+                                end: mNum + count - 1,
+                                total: count
+                            });
+                            i += (count - 1);
+                            currentRestStart = null;
+                            currentRestCount = 0;
+                            continue;
+                        }
+                    }
+
+                    // Check if entire measure consists solely of rests
+                    const notes = m.getElementsByTagName("note");
+                    let isAllRest = false;
+                    if (notes.length > 0) {
+                        isAllRest = true;
+                        for (let n = 0; n < notes.length; n++) {
+                            const restNode = notes[n].getElementsByTagName("rest");
+                            if (restNode.length === 0) {
+                                isAllRest = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (isAllRest) {
+                        if (currentRestStart === null) {
+                            currentRestStart = mNum;
+                            currentRestCount = 1;
+                        } else {
+                            currentRestCount++;
+                        }
+                    } else {
+                        if (currentRestCount >= 2) {
+                            spans.push({
+                                start: currentRestStart,
+                                end: currentRestStart + currentRestCount - 1,
+                                total: currentRestCount
+                            });
+                        }
+                        currentRestStart = null;
+                        currentRestCount = 0;
+                    }
+                }
+
+                if (currentRestCount >= 2) {
+                    spans.push({
+                        start: currentRestStart,
+                        end: currentRestStart + currentRestCount - 1,
+                        total: currentRestCount
+                    });
+                }
+            } catch (err) {
+                console.warn("Rest span analysis fallback:", err);
+            }
+            return spans;
+        }
+
+        // --- STUDENT MULTIMEASURE REST HUD & LAST BAR CUE (1, 2, 3, 4) ---
+        function updateStudentRestStatus(measureNumber) {
+            const hud = document.getElementById('student-multirest-hud');
+            const cue = document.getElementById('student-cue-overlay');
+            if (!hud || !cue) return;
+
+            // Clear any active scheduled beat timeouts
+            activeCueTimeouts.forEach(t => clearTimeout(t));
+            activeCueTimeouts = [];
+
+            const currentSpan = studentRestSpans.find(s => measureNumber >= s.start && measureNumber <= s.end);
+
+            if (currentSpan) {
+                const passed = measureNumber - currentSpan.start + 1;
+                const total = currentSpan.total;
+                const remaining = total - passed;
+                const pct = Math.round((passed / total) * 100);
+
+                hud.classList.remove('hidden-view');
+                const hudText = document.getElementById('multirest-hud-text');
+                const hudSub = document.getElementById('multirest-hud-sub');
+                const hudBar = document.getElementById('multirest-hud-bar');
+
+                if (hudText) hudText.innerText = `Bar ${passed} of ${total}`;
+                if (hudSub) hudSub.innerText = remaining === 0 ? "ENTRY ON NEXT BAR!" : `${remaining} bar${remaining > 1 ? 's' : ''} until entry`;
+                if (hudBar) hudBar.style.width = `${pct}%`;
+
+                // If in the LAST bar of the multimeasure rest: Cue the entry!
+                if (measureNumber === currentSpan.end) {
+                    cue.classList.remove('hidden-view');
+                    runLastBarBeatCue();
+                } else {
+                    cue.classList.add('hidden-view');
+                }
+            } else {
+                hud.classList.add('hidden-view');
+                cue.classList.add('hidden-view');
+            }
+        }
+
+        function runLastBarBeatCue() {
+            const numBeats = (currentTimeSignature && currentTimeSignature.num) ? currentTimeSignature.num : 4;
+            const msPerBeat = (60000 / bpm) * (currentTimeSignature.den === 8 ? (currentTimeSignature.num % 3 === 0 ? 1 : 0.5) : (4 / (currentTimeSignature.den || 4)));
+
+            const numEl = document.getElementById('cue-counter-number');
+            const subEl = document.getElementById('cue-counter-sub');
+
+            for (let b = 1; b <= numBeats; b++) {
+                const delay = (b - 1) * msPerBeat;
+                const t = setTimeout(() => {
+                    if (numEl) {
+                        numEl.innerText = b;
+                        numEl.classList.remove('animate-cue-pulse');
+                        void numEl.offsetWidth; // Force CSS reflow to re-trigger scale pulse
+                        numEl.classList.add('animate-cue-pulse');
+                        if (b === numBeats) {
+                            numEl.style.color = "#ef4444"; // Vivid red on the final beat
+                        } else {
+                            numEl.style.color = "#ffffff";
+                        }
+                    }
+                    if (subEl) subEl.innerText = `Beat ${b} of ${numBeats}`;
+                    flashDot('metro-dot-student');
+                }, delay);
+                activeCueTimeouts.push(t);
+            }
+        }
+
         window.selectPart = async function(partIndexStr) {
             if(!currentXmlData) return;
             const index = parseInt(partIndexStr);
@@ -3283,7 +3576,14 @@
             showToast('Loading your part...', 'info');
             document.getElementById('student-placeholder').classList.add('hidden-view');
             document.getElementById('osmd-student-wrapper').classList.remove('hidden-view');
-                        
+            
+            // Analyze multimeasure rests for this specific part
+            studentRestSpans = computePartRestSpans(currentXmlData, index);
+            if (studentRestSpans.length > 0) {
+                const totalRests = studentRestSpans.reduce((acc, s) => acc + s.total, 0);
+                showToast(`Detected ${studentRestSpans.length} multimeasure rest section(s) (${totalRests} total bars). Cues enabled.`, 'info');
+            }
+
             await renderStudentTransposedXml(index);
         };
 
@@ -3357,6 +3657,7 @@
             currentMeasureNumber = measureNumber;
             if (!osmdStudent || !osmdStudent.graphic) return;
             highlightMeasure(osmdStudent, 'student-highlight-box', measureNumber, 'osmd-student-wrapper');
+            updateStudentRestStatus(measureNumber);
             updateProgressUI();
         }
 
